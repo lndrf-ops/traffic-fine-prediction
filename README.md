@@ -26,11 +26,9 @@ python run_pipeline.py
 
 ## 3. Dashboard starten
 Startet die Streamlit Web-App zur interaktiven Analyse einzelner Fälle:
--------
-Bash
+
 streamlit run app/app.py
 Das Dashboard öffnet sich anschließend automatisch im Browser unter http://localhost:8501.
--------
 
 ## Team
 Lennard Ruf
