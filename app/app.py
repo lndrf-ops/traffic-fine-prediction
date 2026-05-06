@@ -6,7 +6,7 @@ import plotly.express as px
 from PIL import Image
 
 # --- 1. KONFIGURATION & DATEN LADEN ---
-st.set_page_config(page_title="Strafzettel KI Dashboard", page_icon="🚦", layout="wide")
+st.set_page_config(page_title="Road Traffic Fines", page_icon="🚦", layout="wide")
 
 @st.cache_resource
 def load_model():
@@ -39,10 +39,10 @@ Dieses Dashboard kombiniert **Process Mining** mit **Machine Learning**, um den 
 
 # Erstellung der 4 Tabs
 tab1, tab2, tab3, tab4 = st.tabs([
-    "📊 Data Explorer (Task 3)", 
-    "⏳ Process Discovery (Task 4)", 
-    "⚖️ Model Performance (Bonus 1)", 
-    "🔮 Predictive System (Task 5)"
+    "📊 Data Explorer", 
+    "⏳ Process Discovery", 
+    "⚖️ Model Performance", 
+    "🔮 Predictive System"
 ])
 
 # ==========================================
@@ -98,9 +98,6 @@ with tab2:
                             title="Top 10 Zeitfresser im Prozess")
         fig_bottle.update_layout(yaxis={'categoryorder':'total ascending'})
         st.plotly_chart(fig_bottle, use_container_width=True)
-    st.divider()
-    st.subheader("Organisatorische Perspektive")
-    st.info("Hinweis: Der Datensatz enthält keine Ressourcen-IDs (Mitarbeiter).")
 
 # ==========================================
 # TAB 3: MODEL PERFORMANCE (JETZT KORRIGIERT)
@@ -149,11 +146,26 @@ with tab4:
             test_df = pd.DataFrame([input_data], columns=features)
             pred = model.predict(test_df)[0]
             prob = model.predict_proba(test_df)[0][1]
-            st.subheader("Analyseergebnis")
+            
+            st.subheader("Analyseergebnis (Predictive)")
             if pred == 1:
                 st.error(f"🚨 **Hohes Inkasso-Risiko ({prob*100:.1f}%)**")
             else:
                 st.success(f"✅ **Zahlung wahrscheinlich (Risiko: {prob*100:.1f}%)**")
+            
+            # --- NEU: BONUS 3 (PRESCRIPTIVE MODELING) ---
+            st.divider()
+            st.subheader("🛠️ Handlungsempfehlung (Prescriptive)")
+            st.markdown("Basierend auf dem vorhergesagten Risiko empfiehlt das System folgende nächste Prozessschritte, um übergeordnete Ziele (z.B. Kostenminimierung) zu maximieren:")
+            
+            if prob >= 0.80:
+                st.error("**Aktionsebene Rot:** Bieten Sie dem Bürger sofort aktiv eine **Ratenzahlung** an oder versenden Sie eine **SMS-Eilmahnung**, bevor die teuren Inkasso-Gebühren fällig werden.")
+            elif prob >= 0.50:
+                st.warning("**Aktionsebene Gelb:** Priorisieren Sie diesen Fall. Versenden Sie manuell ein **Warnschreiben**, um den automatisierten Ablauf zu beschleunigen.")
+            else:
+                st.success("**Aktionsebene Grün:** Keine Intervention nötig. Lassen Sie den Fall im **Standard-Workflow** (reguläres Warten auf Zahlung).")
+            # ---------------------------------------------
+
             st.divider()
             st.subheader("Erklärbarkeit (SHAP)")
             shap_img_path = 'models/shap_summary.png'
