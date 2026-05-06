@@ -6,3 +6,4 @@ pm4py
 shap
 streamlit
 matplotlib
+plotly

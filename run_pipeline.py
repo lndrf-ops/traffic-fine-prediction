@@ -1,5 +1,5 @@
 import time
-from src import data_prep, features, train, evaluate
+from src import data_prep, features, train, evaluate, discovery
 
 def run_all():
     start_time = time.time()
@@ -17,6 +17,9 @@ def run_all():
 
         print("\n▶️ SCHRITT 4: Evaluierung & SHAP")
         evaluate.main()
+        
+        print("\n▶️ SCHRITT 5: Process Discovery")
+        discovery.main()
 
         end_time = time.time()
         duration = (end_time - start_time) / 60

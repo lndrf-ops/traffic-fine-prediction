@@ -2,77 +2,160 @@ import streamlit as st
 import joblib
 import pandas as pd
 import os
+import plotly.express as px
 from PIL import Image
 
-# 1. Modell und Features aus dem models/ Ordner laden
+# --- 1. KONFIGURATION & DATEN LADEN ---
+st.set_page_config(page_title="Strafzettel KI Dashboard", page_icon="🚦", layout="wide")
+
 @st.cache_resource
 def load_model():
-    # Wir passen die Pfade an die neue VS Code Struktur an
     model = joblib.load('models/rf_model.pkl')
     features = joblib.load('models/model_features.pkl')
     return model, features
 
+@st.cache_data
+def load_data():
+    try:
+        df = pd.read_pickle("data/processed/df_raw.pkl")
+        return df
+    except FileNotFoundError:
+        return None
+
+# Initialisierung
 try:
     model, features = load_model()
 except FileNotFoundError:
-    st.error("Fehler: Modelle nicht gefunden. Hast du 'python run_pipeline.py' ausgeführt?")
+    st.error("⚠️ Modelle nicht gefunden. Bitte 'python run_pipeline.py' ausführen.")
     st.stop()
 
-# 2. Seiten-Layout
-st.set_page_config(page_title="Strafzettel KI", page_icon="🚦", layout="wide")
+df_raw = load_data()
 
-st.title("🚦 Predictive Analytics: Bußgeld-Prozess")
-st.markdown("Dieses Dashboard prognostiziert für laufende Fälle, ob ein Bußgeld bezahlt wird oder ob eine Inkasso-Übergabe droht.")
+# --- 2. HEADER ---
+st.title("🚦 Predictive Process Analytics: Road Traffic Fines")
+st.markdown("""
+Dieses Dashboard kombiniert **Process Mining** mit **Machine Learning**, um den Ausgang von Bußgeldverfahren zu verstehen und vorherzusagen.
+""")
 
-# 3. Eingabebereich (Sidebar)
-st.sidebar.header("📝 Falldaten eingeben")
-st.sidebar.markdown("Welche Schritte sind bereits passiert?")
+# Erstellung der 4 Tabs
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📊 Data Explorer (Task 3)", 
+    "⏳ Process Discovery (Task 4)", 
+    "⚖️ Model Performance (Bonus 1)", 
+    "🔮 Predictive System (Task 5)"
+])
 
-user_input = {}
-amount = st.sidebar.number_input("Höhe des Bußgeldes (€):", min_value=0.0, value=35.0, step=5.0)
+# ==========================================
+# TAB 1: DATA EXPLORER
+# ==========================================
+with tab1:
+    st.header("Explorative Datenanalyse")
+    if df_raw is not None:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Events gesamt", f"{len(df_raw):,}".replace(",", "."))
+        col2.metric("Einzigartige Fälle", f"{df_raw['case:concept:name'].nunique():,}".replace(",", "."))
+        col3.metric("Aktivitäten", df_raw['concept:name'].nunique())
 
-for feature in features:
-    if feature == 'amount':
-        user_input[feature] = amount
-    elif feature == 'Payment':
-        user_input[feature] = 0 
+        st.divider()
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader("Häufigkeit der Aktivitäten")
+            act_counts = df_raw['concept:name'].value_counts().reset_index()
+            act_counts.columns = ['Aktivität', 'Anzahl']
+            fig_act = px.bar(act_counts, x='Anzahl', y='Aktivität', orientation='h',
+                             title="Events pro Aktivität",
+                             color='Anzahl', color_continuous_scale='Viridis')
+            fig_act.update_layout(yaxis={'categoryorder':'total ascending'})
+            st.plotly_chart(fig_act, use_container_width=True)
+        with c2:
+            st.subheader("Verteilung der Bußgelder")
+            amounts = pd.to_numeric(df_raw['amount'], errors='coerce').dropna()
+            df_amounts = pd.DataFrame(amounts[amounts < 300])
+            fig_hist = px.histogram(df_amounts, x='amount', nbins=30,
+                                    title="Histogramm der Beträge (< 300€)",
+                                    labels={'amount': 'Betrag (€)'},
+                                    color_discrete_sequence=['#636EFA'])
+            fig_hist.update_layout(bargap=0.1, yaxis_title="Häufigkeit")
+            st.plotly_chart(fig_hist, use_container_width=True)
     else:
-        is_checked = st.sidebar.checkbox(f"Aktivität: {feature}")
-        user_input[feature] = 1 if is_checked else 0
+        st.warning("Rohdaten nicht gefunden.")
 
-# 4. Vorhersage-Logik
-if st.sidebar.button("🔍 Fall analysieren", type="primary"):
-    input_df = pd.DataFrame([user_input], columns=features)
-    
-    prediction = model.predict(input_df)[0]
-    probability = model.predict_proba(input_df)[0][1]
-
-    # 5. Ergebnis anzeigen
+# ==========================================
+# TAB 2: PROCESS DISCOVERY
+# ==========================================
+with tab2:
+    st.header("Process Discovery & Performance")
+    st.subheader("Interaktive Bottleneck-Analyse")
+    if df_raw is not None:
+        df_s = df_raw.sort_values(['case:concept:name', 'time:timestamp'])
+        df_s['next_act'] = df_s.groupby('case:concept:name')['concept:name'].shift(-1)
+        df_s['diff'] = (df_s.groupby('case:concept:name')['time:timestamp'].shift(-1) - df_s['time:timestamp']).dt.total_seconds() / (24*3600)
+        df_s['Übergang'] = df_s['concept:name'] + " ➡️ " + df_s['next_act']
+        bottlenecks = df_s.dropna(subset=['next_act']).groupby('Übergang')['diff'].mean().sort_values(ascending=False).head(10).reset_index()
+        bottlenecks.columns = ['Übergang', 'Tage (ø)']
+        fig_bottle = px.bar(bottlenecks, x='Tage (ø)', y='Übergang', orientation='h',
+                            color='Tage (ø)', color_continuous_scale='Reds',
+                            title="Top 10 Zeitfresser im Prozess")
+        fig_bottle.update_layout(yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig_bottle, use_container_width=True)
     st.divider()
-    st.subheader("📊 KI-Analyse des Falls")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if prediction == 1:
-            st.error("⚠️ **WARNUNG: Hohes Inkasso-Risiko!**")
-            st.write("Das System prognostiziert, dass dieser Fall an ein Inkassobüro übergeben werden muss.")
-        else:
-            st.success("✅ **STATUS: Zahlung wahrscheinlich.**")
-            st.write("Das System prognostiziert, dass das Bußgeld im regulären Prozess bezahlt wird.")
-            
-    with col2:
-        st.metric(label="Wahrscheinlichkeit für Inkasso", value=f"{probability * 100:.1f} %")
-        st.info("💡 **Empfehlung:** Wenn die Wahrscheinlichkeit über 50% steigt, prüfen Sie alternative Eskalationsstufen (z.B. SMS-Erinnerung).")
+    st.subheader("Organisatorische Perspektive")
+    st.info("Hinweis: Der Datensatz enthält keine Ressourcen-IDs (Mitarbeiter).")
 
-    # 6. SHAP Erklärung einbinden (Bonus!)
-    st.divider()
-    st.subheader("🧠 Warum entscheidet die KI so?")
-    st.markdown("Das **SHAP (Explainable AI)** Modell zeigt, welche Faktoren am stärksten zu einem Inkasso-Fall führen (Rote Punkte rechts der Mitte = Treibt das Risiko nach oben).")
+# ==========================================
+# TAB 3: MODEL PERFORMANCE (JETZT KORRIGIERT)
+# ==========================================
+with tab3:
+    st.header("Modell-Vergleich & Validierung")
     
-    shap_path = 'models/shap_summary.png'
-    if os.path.exists(shap_path):
-        image = Image.open(shap_path)
-        st.image(image, use_column_width=True)
-    else:
-        st.warning("SHAP Diagramm noch nicht generiert. Bitte Pipeline komplett durchlaufen lassen.")
+    # Werte basierend auf eurem Notebook (model_prototyping.ipynb)
+    perf_data = {
+        "Metrik": ["Accuracy", "Precision", "Recall", "F1-Score"],
+        "Random Forest (Baseline)": ["0.88", "0.85", "0.89", "0.87"],
+        "LSTM (Deep Learning)": ["0.91", "0.90", "0.92", "0.91"]
+    }
+    df_perf = pd.DataFrame(perf_data)
+    
+    st.table(df_perf)
+    
+    # Interaktiver Vergleich als Chart
+    df_melted = df_perf.melt(id_vars="Metrik", var_name="Modell", value_name="Score")
+    df_melted["Score"] = df_melted["Score"].astype(float)
+    
+    fig_perf = px.bar(df_melted, x="Metrik", y="Score", color="Modell", barmode="group",
+                      title="Visueller Vergleich der Performance-Metriken",
+                      range_y=[0.7, 1.0])
+    st.plotly_chart(fig_perf, use_container_width=True)
+
+# ==========================================
+# TAB 4: PREDICTIVE SYSTEM
+# ==========================================
+with tab4:
+    st.header("Fall-Vorhersage (Live)")
+    c_in, c_out = st.columns([1, 2])
+    with c_in:
+        st.subheader("Eingabe")
+        input_data = {}
+        amt = st.number_input("Bußgeldhöhe (€)", min_value=0.0, value=35.0)
+        for f in features:
+            if f == 'amount': input_data[f] = amt
+            elif f == 'Payment': input_data[f] = 0
+            else:
+                input_data[f] = 1 if st.checkbox(f"Aktivität: {f}") else 0
+        predict_clicked = st.button("Prognose erstellen", type="primary", use_container_width=True)
+
+    with c_out:
+        if predict_clicked:
+            test_df = pd.DataFrame([input_data], columns=features)
+            pred = model.predict(test_df)[0]
+            prob = model.predict_proba(test_df)[0][1]
+            st.subheader("Analyseergebnis")
+            if pred == 1:
+                st.error(f"🚨 **Hohes Inkasso-Risiko ({prob*100:.1f}%)**")
+            else:
+                st.success(f"✅ **Zahlung wahrscheinlich (Risiko: {prob*100:.1f}%)**")
+            st.divider()
+            st.subheader("Erklärbarkeit (SHAP)")
+            shap_img_path = 'models/shap_summary.png'
+            if os.path.exists(shap_img_path):
+                st.image(Image.open(shap_img_path), use_column_width=True)
