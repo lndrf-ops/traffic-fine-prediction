@@ -35,7 +35,7 @@ def main():
     plt.savefig("models/shap_summary.png", bbox_inches='tight')
     print("✅ SHAP Plot gespeichert.")
 
-    # 2. CONFORMANCE CHECKING & PETRI-NETZ EXPORT
+   # 2. CONFORMANCE CHECKING & PETRI-NETZ EXPORT
     print("\n2. Starte Conformance Checking & Process Discovery...")
     df = pd.read_pickle("data/processed/df_raw.pkl")
     
@@ -43,11 +43,31 @@ def main():
     happy_path_log = pm4py.filter_variants_top_k(df, 10)
     net, initial_marking, final_marking = pm4py.discover_petri_net_inductive(happy_path_log)
     
-    petri_path = "models/discovery/petri_net.png"
-    pm4py.save_vis_petri_net(net, initial_marking, final_marking, petri_path)
-    print(f"✅ Petri-Netz exportiert nach: {petri_path}")
+    # --- FARBLICHE ABSTIMMUNG AUF DAS DESIGN-SCHEMA (#a02c34) ---
+    from pm4py.visualization.petri_net import visualizer as pn_visualizer
     
-    # Fitness berechnen
+    # Generiere das standardmäßige Graphviz-Objekt
+    gviz = pn_visualizer.apply(net, initial_marking, final_marking)
+    
+    # Farben und Styles an das neue Corporate Design anpassen
+    gviz.graph_attr['rankdir'] = 'LR'  # Übersichtliches Layout von links nach rechts
+    gviz.graph_attr['bgcolor'] = 'transparent'  # Transparenter Hintergrund für Präsentationen
+    
+    # Knoten-Styles (Places und Transitions)
+    gviz.node_attr['color'] = '#a02c34'       # Randfarbe der Knoten
+    gviz.node_attr['fontcolor'] = '#a02c34'   # Textfarbe innerhalb der Knoten
+    gviz.node_attr['fontname'] = 'Arial'      # Moderne, saubere Schriftart
+    
+    # Kanten-Styles (Die Verbindungs-Pfeile)
+    gviz.edge_attr['color'] = '#a02c34'       # Farbe der Pfeile
+    gviz.edge_attr['fontname'] = 'Arial'
+    
+    # Speicher-Pfad definieren und visualisiertes Petri-Netz exportieren
+    petri_path = "models/discovery/petri_net.png"
+    pn_visualizer.save(gviz, petri_path)
+    print(f"✅ Color-coordinated Petri Net exported to: {petri_path}")
+    
+    # Fitness berechnen (Unverändert)
     sample_cases = df['case:concept:name'].drop_duplicates().sample(2000, random_state=42)
     real_world_sample = df[df['case:concept:name'].isin(sample_cases)]
     fitness = pm4py.fitness_token_based_replay(real_world_sample, net, initial_marking, final_marking)
