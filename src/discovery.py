@@ -15,7 +15,7 @@ def main():
     # Sort by case and timestamp for sequential analysis
     df_sorted = df.sort_values(by=['case:concept:name', 'time:timestamp']).copy()
     
-    # --- A) TIME-RELATED PERFORMANCE (Top 5 Bottlenecks) ---
+  # # --- A) TIME-RELATED PERFORMANCE (Top 5 Bottlenecks) ---
     print("1. Calculating Top 5 Bottlenecks...")
     df_sorted['next_time'] = df_sorted.groupby('case:concept:name')['time:timestamp'].shift(-1)
     df_sorted['next_act'] = df_sorted.groupby('case:concept:name')['concept:name'].shift(-1)
@@ -26,12 +26,20 @@ def main():
     transitions = df_sorted.dropna(subset=['next_act']).copy()
     transitions['transition_name'] = transitions['concept:name'] + ' -> ' + transitions['next_act']
     
-    # Aggregate and filter for top 5 bottlenecks
-    avg_transitions = transitions.groupby('transition_name')['transition_time_days'].mean().sort_values(ascending=False).head(5)
+    # Basis-Statistiken für alle Übergänge berechnen
+    transition_stats = transitions.groupby('transition_name')['transition_time_days'].agg(['mean', 'median', 'count'])
     
-    plt.figure(figsize=(12, 5))
-    avg_transitions.plot(kind='barh', color='#a02c34', edgecolor='black')
-    plt.title('Top 5 Bottlenecks: Transition Durations between Process Steps')
+    # -------------------------------------------------------------------------
+    # 1. DIAGRAMM: Sortiert nach MITTELWERT (Original: bottlenecks.png)
+    # -------------------------------------------------------------------------
+    top_5_mean = transition_stats.sort_values(by='mean', ascending=False).head(5).copy()
+    # N in den Anzeigenamen einbauen
+    top_5_mean['display_name'] = top_5_mean.index + " (N=" + top_5_mean['count'].astype(str) + ")"
+    top_5_mean = top_5_mean.set_index('display_name')
+    
+    plt.figure(figsize=(13, 5)) # Breite leicht erhöht für die längere Beschriftung
+    top_5_mean['mean'].plot(kind='barh', color='#a02c34', edgecolor='black') # Originales Rot
+    plt.title('Top 5 Bottlenecks: Mean Transition Durations (N = Number of Cases)')
     plt.xlabel('Average Duration (in Days)')
     plt.ylabel('')
     plt.gca().invert_yaxis()
@@ -39,6 +47,28 @@ def main():
     plt.tight_layout()
     plt.savefig(f"{save_dir}/bottlenecks.png", bbox_inches='tight')
     plt.close()
+    
+    # -------------------------------------------------------------------------
+    # 2. DIAGRAMM: Sortiert nach MEDIAN (Neu: bottlenecks_median.png)
+    # -------------------------------------------------------------------------
+    top_5_median = transition_stats.sort_values(by='median', ascending=False).head(5).copy()
+    # N in den Anzeigenamen einbauen
+    top_5_median['display_name'] = top_5_median.index + " (N=" + top_5_median['count'].astype(str) + ")"
+    top_5_median = top_5_median.set_index('display_name')
+    
+    plt.figure(figsize=(13, 5))
+    top_5_median['median'].plot(kind='barh', color='#a02c34', edgecolor='black') # Alternatives Blau zur Unterscheidung
+    plt.title('Top 5 Bottlenecks: Median Transition Durations (N = Number of Cases)')
+    plt.xlabel('Median Duration (in Days)')
+    plt.ylabel('')
+    plt.gca().invert_yaxis()
+    plt.grid(axis='x', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    plt.savefig(f"{save_dir}/bottlenecks_median.png", bbox_inches='tight')
+    plt.close()
+    
+    print("-> Both bottleneck plots generated successfully with case counts (N).")
+
 
     # --- B) TOTAL CASE DURATIONS ---
     print("2. Calculating Total Case Durations...")
