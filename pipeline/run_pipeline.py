@@ -1,5 +1,6 @@
 import time
-from src import data_prep, features, train, evaluate, discovery, generative_ai
+from src import data_prep, discovery, evaluate, features, generative_ai
+from src import train
 
 def run_all():
     start_time = time.time()
