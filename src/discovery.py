@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import os
 
 def main():
@@ -119,6 +120,66 @@ def main():
             f.write("Limitation: The 4TU Road Traffic Fines dataset does not contain an 'org:resource' column.")
             
     print("✅ All materials for the preliminary presentation successfully saved in 'models/discovery/'!")
+
+# --- E) DOTTED CHART (BATCHING ANALYSIS) ---
+    print("5. Generating Dotted Chart (Batching Analysis)...")
+    import pm4py
+    
+    # Sampling: Um Überladung zu vermeiden
+    df_sample_dc = df_sorted.head(10000).copy()
+    
+    # DataFrame für pm4py formatieren (generiert die fehlende @@case_index Spalte)
+    df_sample_dc = pm4py.format_dataframe(
+        df_sample_dc, 
+        case_id='case:concept:name', 
+        activity_key='concept:name', 
+        timestamp_key='time:timestamp'
+    )
+    
+    # Nutzung der modernen API-Funktion von pm4py
+    pm4py.save_vis_dotted_chart(df_sample_dc, f"{save_dir}/dotted_chart.png")
+    print("-> Dotted Chart erfolgreich gespeichert.")
+    
+    # --- F) PERFORMANCE SPECTRUM (TU EINDHOVEN) ---
+    print("6. Generating Performance Spectrum...")
+
+    # Für ein sauberes Spectrum filtern wir auf die häufigsten 5 Aktivitäten
+    # und nehmen eine Stichprobe von 150 Fällen, sonst wird es ein "Spaghetti-Graph"
+    top_acts = df_sorted['concept:name'].value_counts().head(5).index.tolist()
+    sample_cases = df_sorted['case:concept:name'].drop_duplicates().sample(150, random_state=42)
+    
+    df_spectrum = df_sorted[df_sorted['case:concept:name'].isin(sample_cases)].copy()
+    df_spectrum = df_spectrum[df_spectrum['concept:name'].isin(top_acts)]
+    
+    # Y-Achsen Mapping für die Aktivitäten (Reihenfolge erzwingen)
+    act_y = {act: i for i, act in enumerate(top_acts)}
+    
+    plt.figure(figsize=(14, 7))
+    
+    # Zeichne die Verbindungslinien pro Fall
+    for case, group in df_spectrum.groupby('case:concept:name'):
+        if len(group) > 1:
+            group = group.sort_values('time:timestamp')
+            x = group['time:timestamp']
+            y = group['concept:name'].map(act_y)
+            # Flache Linien = schnell, Steile Linien = lange Wartezeit
+            plt.plot(x, y, marker='o', markersize=4, alpha=0.5, linewidth=1.5)
+
+    plt.yticks(range(len(top_acts)), top_acts)
+    plt.title('Performance Spectrum (Sample of 150 Cases over Time)')
+    plt.xlabel('Zeitachse (2000 - 2013)')
+    plt.ylabel('Prozessschritt')
+    
+    # Formatierung der X-Achse für bessere Lesbarkeit der Jahre
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    plt.gca().xaxis.set_major_locator(mdates.YearLocator())
+    plt.gcf().autofmt_xdate()
+    
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.savefig(f"{save_dir}/performance_spectrum.png", bbox_inches='tight')
+    plt.close()
+    print("-> Performance Spectrum erfolgreich gespeichert.")
 
 if __name__ == "__main__":
     main()

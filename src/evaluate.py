@@ -73,5 +73,16 @@ def main():
     fitness = pm4py.fitness_token_based_replay(real_world_sample, net, initial_marking, final_marking)
     print(f"✅ Prozent der Fälle mit perfektem Durchlauf: {fitness['perc_fit_traces']:.2f} %")
 
+    # Speicher-Pfad definieren und visualisiertes Petri-Netz exportieren
+    petri_path = "models/discovery/petri_net.png"
+    pn_visualizer.save(gviz, petri_path)
+    print(f"✅ Color-coordinated Petri Net exported to: {petri_path}")
+
+    dot_path = "models/discovery/petri_net.dot"
+    dot_string = gviz.source if hasattr(gviz, 'source') else str(gviz)
+    with open(dot_path, "w", encoding="utf-8") as f:
+        f.write(dot_string)
+    print(f"✅ Native DOT source exported to: {dot_path}")
+
 if __name__ == "__main__":
     main()
