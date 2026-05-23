@@ -13,12 +13,47 @@ def render(df_raw):
         df_s['next_act'] = df_s.groupby('case:concept:name')['concept:name'].shift(-1)
         df_s['diff'] = (df_s.groupby('case:concept:name')['time:timestamp'].shift(-1) - df_s['time:timestamp']).dt.total_seconds() / (24*3600)
         df_s['Übergang'] = df_s['concept:name'] + " ➡️ " + df_s['next_act']
-        bottlenecks = df_s.dropna(subset=['next_act']).groupby('Übergang')['diff'].mean().sort_values(ascending=False).head(10).reset_index()
-        bottlenecks.columns = ['Übergang', 'Tage (ø)']
-        
-        fig_bottle = px.bar(bottlenecks, x='Tage (ø)', y='Übergang', orientation='h', color='Tage (ø)', color_continuous_scale='Reds', title="Top 10 Zeitfresser im Prozess")
-        fig_bottle.update_layout(yaxis={'categoryorder':'total ascending'})
-        st.plotly_chart(fig_bottle, use_container_width=True, key="chart_bottlenecks")
+        bottleneck_stats = df_s.dropna(subset=['next_act']).groupby('Übergang').agg(
+            **{
+                'Tage_mean (ø)': ('diff', 'mean'),
+                'Tage_median': ('diff', 'median'),
+                'Fälle': ('case:concept:name', 'nunique')
+            }
+        ).reset_index()
+
+        bottlenecks_mean = bottleneck_stats.sort_values('Tage_mean (ø)', ascending=False).head(10).reset_index(drop=True)
+        bottlenecks_median = bottleneck_stats.sort_values('Tage_median', ascending=False).head(10).reset_index(drop=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            fig_bottle_mean = px.bar(
+                bottlenecks_mean,
+                x='Tage_mean (ø)',
+                y='Übergang',
+                orientation='h',
+                color='Tage_mean (ø)',
+                hover_data=['Fälle'],
+                color_continuous_scale='Reds',
+                title="Top 10 Zeitfresser (Mittelwert)"
+            )
+            fig_bottle_mean.update_layout(yaxis={'categoryorder':'total ascending'})
+            fig_bottle_mean.update_traces(hovertemplate='%{y}<br>Tage (ø): %{x:.2f}<br>Fälle: %{customdata[0]}<extra></extra>')
+            st.plotly_chart(fig_bottle_mean, use_container_width=True, key="chart_bottlenecks_mean")
+
+        with col2:
+            fig_bottle_median = px.bar(
+                bottlenecks_median,
+                x='Tage_median',
+                y='Übergang',
+                orientation='h',
+                color='Tage_median',
+                hover_data=['Fälle'],
+                color_continuous_scale='Blues',
+                title="Top 10 Zeitfresser (Median)"
+            )
+            fig_bottle_median.update_layout(yaxis={'categoryorder':'total ascending'})
+            fig_bottle_median.update_traces(hovertemplate='%{y}<br>Median Tage: %{x:.2f}<br>Fälle: %{customdata[0]}<extra></extra>')
+            st.plotly_chart(fig_bottle_median, use_container_width=True, key="chart_bottlenecks_median")
 
         st.divider()
 
