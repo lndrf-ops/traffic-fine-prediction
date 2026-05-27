@@ -14,6 +14,33 @@ def render(df_raw):
         col3.metric("Aktivitäten", df_raw['concept:name'].nunique())
 
         st.divider()
+        st.subheader("Top 5 Prozessvarianten")
+        df_variants = (
+            df_raw.sort_values(['case:concept:name', 'time:timestamp'])
+                  .groupby('case:concept:name')['concept:name']
+                  .agg(lambda x: ' ➜ '.join(x))
+                  .reset_index()
+        )
+        variant_counts = (
+            df_variants['concept:name']
+                       .value_counts()
+                       .head(5)
+                       .reset_index()
+        )
+        variant_counts.columns = ['Prozessvariante', 'Anzahl Fälle']
+        fig_variants = px.bar(
+            variant_counts,
+            x='Anzahl Fälle',
+            y='Prozessvariante',
+            orientation='h',
+            title='Top 5 häufigste Prozessvarianten',
+            color='Anzahl Fälle',
+            color_continuous_scale='Teal'
+        )
+        fig_variants.update_layout(yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig_variants, use_container_width=True, key='chart_top_variants')
+
+        st.divider()
         c1, c2 = st.columns(2)
         with c1:
             st.subheader("Häufigkeit der Aktivitäten")
