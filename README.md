@@ -34,8 +34,8 @@ traffic-fine-prediction/
 │   └── reports/                    # JSON reports, synthetic event log
 ├── src/
 │   ├── t1_data_loading.py          # Task 1: Read XES file
-│   ├── t2_data_cleaning.py         # Task 2: Cleaning & labeling
-│   ├── t3_descriptive_analysis.py  # Task 3: Descriptive statistics
+│   ├── t2_descriptive_analysis.py  # Task 2: Descriptive statistics & column profiling
+│   ├── t3_data_cleaning.py         # Task 3: Cleaning & labeling
 │   ├── t4_process_discovery.py     # Task 4: Process Discovery & bottlenecks
 │   ├── t5_conformance_checking.py  # Task 5: Conformance Checking
 │   ├── t6_feature_engineering.py   # Task 6.1: Feature Engineering

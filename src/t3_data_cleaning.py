@@ -29,11 +29,17 @@ def main():
     n_removed = n_before - len(df)
     print(f"  Duplicates removed: {n_removed:,}")
 
-    # 4. Clean numeric columns
+    # 4. Drop uninformative columns identified in t3 column profiling (fill rate < 1%, dummy values)
+    cols_to_drop = [c for c in ['org:resource', 'matricola'] if c in df.columns]
+    if cols_to_drop:
+        df = df.drop(columns=cols_to_drop)
+        print(f"  Dropped low-quality columns: {cols_to_drop}")
+
+    # 5. Clean numeric columns
     if 'amount' in df.columns:
         df['amount'] = pd.to_numeric(df['amount'], errors='coerce').fillna(0)
 
-    # 5. Case labeling (determine outcome)
+    # 6. Case labeling (determine outcome)
     print("  Labeling cases (Payment=0, Credit Collection=1)...")
     cases = df.groupby('case:concept:name')['concept:name'].apply(list).reset_index()
 
@@ -48,7 +54,7 @@ def main():
     cases['label'] = cases['concept:name'].apply(determine_outcome)
     completed_cases = cases[cases['label'] != -1].copy()
 
-    # 5b. Extract case-level attributes (from first event of each case)
+    # 6b. Extract case-level attributes (from first event of each case)
     case_attrs = ['vehicleClass', 'article', 'points']
     available_attrs = [c for c in case_attrs if c in df.columns]
     if available_attrs:
@@ -59,13 +65,15 @@ def main():
     n_payment = (completed_cases['label'] == 0).sum()
     n_collection = (completed_cases['label'] == 1).sum()
     n_incomplete = len(cases) - len(completed_cases)
-    print(f"  Completed Cases: {len(completed_cases):,} (Payment: {n_payment:,}, Collection: {n_collection:,})")
-    print(f"  Incomplete Cases (removed): {n_incomplete:,}")
+    print(f"  Completed Cases:   {len(completed_cases):,}")
+    print(f"    Payment (0):     {n_payment:,} ({n_payment / len(completed_cases) * 100:.1f}%)")
+    print(f"    Collection (1):  {n_collection:,} ({n_collection / len(completed_cases) * 100:.1f}%)")
+    print(f"  Incomplete Cases (no clear outcome, excluded): {n_incomplete:,}")
 
-    # 6. Add event position
+    # 7. Add event position
     df['event_position'] = df.groupby('case:concept:name').cumcount() + 1
 
-    # 7. Speichern
+    # 8. Speichern
     os.makedirs('data/cleaned', exist_ok=True)
     df.to_pickle("data/cleaned/df_cleaned.pkl")
     completed_cases.to_pickle("data/cleaned/completed_cases.pkl")

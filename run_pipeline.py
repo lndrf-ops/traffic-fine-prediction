@@ -1,6 +1,6 @@
 """
 Traffic Fine Prediction - Main Pipeline
-Executes all tasks sequentially: Data → Cleaning → Analysis → Discovery → Conformance → ML → Evaluation
+Executes all tasks sequentially: Data → Analysis → Cleaning → Discovery → Conformance → ML → Evaluation
 
 Usage:
     python run_pipeline.py          # Run all tasks
@@ -12,8 +12,8 @@ import sys
 import time
 from src import (
     t1_data_loading,
-    t2_data_cleaning,
-    t3_descriptive_analysis,
+    t2_descriptive_analysis,
+    t3_data_cleaning,
     t4_process_discovery,
     t5_conformance_checking,
     t6_feature_engineering,
@@ -25,8 +25,8 @@ from src import (
 
 TASKS = [
     (1, "Data Loading", t1_data_loading),
-    (2, "Data Cleaning", t2_data_cleaning),
-    (3, "Descriptive Analysis", t3_descriptive_analysis),
+    (2, "Descriptive Analysis", t2_descriptive_analysis),
+    (3, "Data Cleaning", t3_data_cleaning),
     (4, "Process Discovery", t4_process_discovery),
     (5, "Conformance Checking", t5_conformance_checking),
     (6.1, "Feature Engineering", t6_feature_engineering),
