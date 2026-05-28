@@ -1,9 +1,15 @@
 venv/
 
 data/raw/
-data/processed/
+data/cleaned/
+data/features/
+
+outputs/
 
 .DS_Store
 
 __pycache__/
 *.pyc
+
+CLAUDE.md
+PLAN.md
