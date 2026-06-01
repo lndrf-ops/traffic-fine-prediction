@@ -1,4 +1,4 @@
-"""Task 3: Descriptive Data Analysis (Data Exploration & Understanding)
+"""Task 2: Descriptive Data Analysis (Data Exploration & Understanding)
 - Column quality profiling (fill rates, min/max/median, unique values)
 - Dataset properties (cases, events, activities, time range)
 - Dotted Chart visualization
@@ -17,7 +17,7 @@ import pandas as pd
 
 def main():
     print("=" * 60)
-    print("TASK 3: Descriptive Data Analysis")
+    print("TASK 2: Descriptive Data Analysis")
     print("=" * 60)
 
     # Raw event log — no cleaning applied yet
@@ -113,13 +113,30 @@ def main():
             }
             for col, p in low_quality_cols.items()
         },
+        "known_limitations": {
+            "timestamps_date_only": "All timestamps have time component 00:00:00 — only dates were recorded in the source system. Intra-day analysis is not possible.",
+        },
     }
 
     with open(f"{report_dir}/descriptive_analysis.json", "w") as f:
         json.dump(report, f, indent=2)
     print(f"\n  ✅ Report saved: {report_dir}/descriptive_analysis.json")
 
-    # 4. Dotted Chart
+    # 4. Activity Frequency
+    print("\n  Generating Activity Frequency Chart...")
+    act_freq = df["concept:name"].value_counts()
+    fig, ax = plt.subplots(figsize=(12, 5))
+    act_freq.plot(kind="barh", color="#a02c34", edgecolor="black", ax=ax)
+    ax.set_xlabel("Number of Events")
+    ax.set_title("Activity Frequency (all events)")
+    ax.invert_yaxis()
+    ax.grid(axis="x", linestyle="--", alpha=0.7)
+    plt.tight_layout()
+    plt.savefig(f"{save_dir}/activity_frequency.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"  ✅ Activity Frequency saved: {save_dir}/activity_frequency.png")
+
+    # 5. Dotted Chart
     print("\n  Generating Dotted Chart...")
     sample_cases = df["case:concept:name"].drop_duplicates().sample(500, random_state=42)
     df_sample = df[df["case:concept:name"].isin(sample_cases)].copy()

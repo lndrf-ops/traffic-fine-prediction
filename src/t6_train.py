@@ -1,125 +1,290 @@
 """Task 6.2: Model Training
-- Random Forest training (k=2, k=5)
-- Logistic Regression training (k=2, k=5)
-- LSTM training (k=5)
-- Saves: outputs/models/rf_k2.pkl, rf_k5.pkl, lr_k2.pkl, lr_k5.pkl, lstm.pth
+
+Trains all models in two variants (Control-Flow only / Data-Aware) for
+two tasks (Outcome classification / Remaining Time regression), following
+the model lineup in CLAUDE.md and the validation strategy in docs/validation_strategy.md.
 """
 
 import os
+import warnings
+
+# --- MAC MULTIPROCESSING FIX ---
+# Verhindert den "loky" Segmentation Fault auf Apple Silicon Macs
+os.environ['OBJC_DISABLE_INITIALIZE_FORK_SAFETY'] = 'YES'
+# -------------------------------
+
+import json
+import random
+
+import joblib
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import TensorDataset, DataLoader, random_split
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-import joblib
+from sklearn.dummy import DummyClassifier, DummyRegressor
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import DataLoader, TensorDataset
+from xgboost import XGBClassifier, XGBRegressor
 
+PREFIX_LENGTHS = [2, 3, 5, 8]
+VARIANTS = ["cf", "da"]
+SEED = 42
 
-# LSTM Architecture
+def set_seeds():
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+
+def load_split(variant: str, k: int):
+    """Load train/val/test feature tables for a given variant and k."""
+    df = pd.read_parquet(f"data/features/prefix_k{k}_{variant}.parquet")
+    train = df[df["split"] == "train"].drop(columns=["split"])
+    val = df[df["split"] == "val"].drop(columns=["split"])
+    test = df[df["split"] == "test"].drop(columns=["split"])
+    return train, val, test
+
+def feature_cols(df: pd.DataFrame, task: str):
+    """Return feature column names, excluding target columns."""
+    exclude = {"label", "remaining_days", "split"}
+    return [c for c in df.columns if c not in exclude]
+
+# ---------------------------------------------------------------------------
+# Classical models — Outcome (classification)
+# ---------------------------------------------------------------------------
+
+def train_outcome_classical(train: pd.DataFrame, val: pd.DataFrame, k: int, variant: str, save_dir: str):
+    fcols = feature_cols(train, "outcome")
+    X_train, y_train = train[fcols].values, train["label"].values
+    X_val, y_val = val[fcols].values, val["label"].values
+
+    n_pos = y_train.sum()
+    n_neg = len(y_train) - n_pos
+    scale_pos = n_neg / n_pos  # for XGBoost
+
+    # Hyperparameters: defaults chosen following scikit-learn/XGBoost recommendations.
+    # No grid search performed — with 4 activities (CF) the models saturate quickly;
+    # tuning would yield marginal improvement at high computational cost.
+    models = {
+        "majority": DummyClassifier(strategy="most_frequent", random_state=SEED),
+        "logreg": LogisticRegression(
+            max_iter=2000, random_state=SEED, class_weight="balanced", C=1.0
+        ),
+        "rf": RandomForestClassifier(
+            n_estimators=300, random_state=SEED, n_jobs=1,  # n_jobs=1: macOS Apple Silicon fork safety
+            class_weight="balanced"
+        ),
+        "xgb": XGBClassifier(
+            n_estimators=500,
+            learning_rate=0.05,
+            max_depth=6,
+            scale_pos_weight=scale_pos,
+            random_state=SEED,
+            eval_metric="logloss",
+            early_stopping_rounds=30,
+            verbosity=0,
+            n_jobs=1 # FIX: n_jobs=1
+        ),
+    }
+
+    for name, model in models.items():
+        if name == "xgb":
+            model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
+        else:
+            model.fit(X_train, y_train)
+        path = f"{save_dir}/{name}_outcome_{variant}_k{k}.pkl"
+        joblib.dump(model, path)
+
+    joblib.dump(fcols, f"{save_dir}/feature_cols_outcome_{variant}_k{k}.json")
+    print(f"     Outcome classifiers saved ({variant.upper()}, k={k}): majority, logreg, rf, xgb")
+
+# ---------------------------------------------------------------------------
+# Classical models — Remaining Time (regression)
+# ---------------------------------------------------------------------------
+
+def train_remaining_classical(train: pd.DataFrame, val: pd.DataFrame, k: int, variant: str, save_dir: str):
+    fcols = feature_cols(train, "remaining")
+    X_train, y_train = train[fcols].values, train["remaining_days"].values
+    X_val, y_val = val[fcols].values, val["remaining_days"].values
+
+    models = {
+        "mean": DummyRegressor(strategy="mean"),
+        "linreg": LinearRegression(),
+        "rf_reg": RandomForestRegressor(
+            n_estimators=300, random_state=SEED, n_jobs=1 # FIX: n_jobs=1
+        ),
+        "xgb_reg": XGBRegressor(
+            n_estimators=500,
+            learning_rate=0.05,
+            max_depth=6,
+            random_state=SEED,
+            eval_metric="mae",
+            early_stopping_rounds=30,
+            verbosity=0,
+            n_jobs=1 # FIX: n_jobs=1
+        ),
+    }
+
+    for name, model in models.items():
+        if name == "xgb_reg":
+            model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
+        else:
+            model.fit(X_train, y_train)
+        path = f"{save_dir}/{name}_remaining_{variant}_k{k}.pkl"
+        joblib.dump(model, path)
+
+    joblib.dump(fcols, f"{save_dir}/feature_cols_remaining_{variant}_k{k}.json")
+    print(f"     Remaining-time regressors saved ({variant.upper()}, k={k}): mean, linreg, rf_reg, xgb_reg")
+
+# ---------------------------------------------------------------------------
+# LSTM — shared architecture for both tasks
+# ---------------------------------------------------------------------------
+
 class ProcessLSTM(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim):
-        super(ProcessLSTM, self).__init__()
+    def __init__(self, vocab_size: int, embedding_dim: int, hidden_dim: int, output_dim: int = 1):
+        super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, batch_first=True)
-        self.fc = nn.Linear(hidden_dim, 1)
+        self.dropout = nn.Dropout(0.3)  # regularization
+        self.fc = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x):
         embedded = self.embedding(x)
-        out, _ = self.lstm(embedded)
-        final_out = out[:, -1, :]
-        return self.fc(final_out).squeeze()
+        _, (h_n, _) = self.lstm(embedded)
+        out = self.dropout(h_n[-1])
+        return self.fc(out).squeeze(-1)
 
+def _load_lstm_data(variant: str, task: str, prefix_lengths: list):
+    seqs_df = pd.read_parquet("data/features/sequences.parquet")
+    seqs_df = seqs_df[seqs_df["prefix_k"].isin(prefix_lengths)].copy()
 
-def train_rf_lr(X, y, k, save_dir):
-    """Train Random Forest and Logistic Regression"""
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+    target_col = "label" if task == "outcome" else "remaining_days"
+    seqs_df = seqs_df.dropna(subset=[target_col])
+
+    tensors = [torch.tensor(seq, dtype=torch.long) for seq in seqs_df["sequence"]]
+    X = pad_sequence(tensors, batch_first=True, padding_value=0)
+    y = torch.tensor(seqs_df[target_col].values, dtype=torch.float32)
+    splits = seqs_df["split"].values
+    return X, y, splits
+
+def train_lstm(variant: str, task: str, vocab_size: int, save_dir: str):
+    X, y, splits = _load_lstm_data(variant, task, PREFIX_LENGTHS)
+
+    X_train = X[splits == "train"]
+    y_train = y[splits == "train"]
+    X_val = X[splits == "val"]
+    y_val = y[splits == "val"]
+
+    train_ds = TensorDataset(X_train, y_train)
+    val_ds = TensorDataset(X_val, y_val)
+    train_loader = DataLoader(train_ds, batch_size=256, shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=512, shuffle=False)
+
+    device = (
+        torch.device("mps") if torch.backends.mps.is_available()
+        else torch.device("cuda") if torch.cuda.is_available()
+        else torch.device("cpu")
     )
 
-    # Random Forest
-    rf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-    rf.fit(X_train, y_train)
-    joblib.dump(rf, f"{save_dir}/rf_k{k}.pkl")
+    model = ProcessLSTM(
+        vocab_size=vocab_size,
+        embedding_dim=32,  
+        hidden_dim=64,
+    ).to(device)
 
-    # Logistic Regression
-    lr = LogisticRegression(max_iter=1000, random_state=42)
-    lr.fit(X_train, y_train)
-    joblib.dump(lr, f"{save_dir}/lr_k{k}.pkl")
+    if task == "outcome":
+        n_pos = (y_train == 1).sum().item()
+        n_neg = (y_train == 0).sum().item()
+        pos_weight = torch.tensor([n_neg / n_pos]).to(device)
+        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    else:
+        criterion = nn.SmoothL1Loss()  
 
-    # Feature names
-    joblib.dump(list(X.columns), f"{save_dir}/features_k{k}.pkl")
+    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, factor=0.5)
 
-    return rf, lr
+    best_val_loss = float("inf")
+    best_state = None
+    patience_counter = 0
+    max_epochs = 30
+    early_stop_patience = 7  
 
-
-def train_lstm(X_lstm, y_lstm, save_dir, epochs=5):
-    """Train LSTM model"""
-    dataset = TensorDataset(X_lstm, y_lstm)
-    train_size = int(0.8 * len(dataset))
-    test_size = len(dataset) - train_size
-    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
-
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-
-    # Class weights
-    num_payments = (y_lstm == 0).sum().item()
-    num_collections = (y_lstm == 1).sum().item()
-    pos_weight = torch.tensor([num_payments / num_collections])
-
-    # Model
-    model = ProcessLSTM(vocab_size=15, embedding_dim=16, hidden_dim=32)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    optimizer = optim.Adam(model.parameters(), lr=0.005)
-
-    for epoch in range(epochs):
+    print(f"     Training LSTM ({task}, {variant.upper()}) on {device}...")
+    for epoch in range(1, max_epochs + 1):
         model.train()
-        total_loss = 0
-        for batch_X, batch_y in train_loader:
+        train_loss = 0.0
+        for bx, by in train_loader:
+            bx, by = bx.to(device), by.to(device)
             optimizer.zero_grad()
-            predictions = model(batch_X)
-            loss = criterion(predictions, batch_y)
+            preds = model(bx)
+            loss = criterion(preds, by)
             loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-            total_loss += loss.item()
-        print(f"     Epoch {epoch+1}/{epochs} - Loss: {total_loss/len(train_loader):.4f}")
+            train_loss += loss.item()
 
-    torch.save(model.state_dict(), f"{save_dir}/lstm.pth")
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for bx, by in val_loader:
+                bx, by = bx.to(device), by.to(device)
+                val_loss += criterion(model(bx), by).item()
+
+        train_loss /= len(train_loader)
+        val_loss /= len(val_loader)
+        scheduler.step(val_loss)
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+            patience_counter = 0
+        else:
+            patience_counter += 1
+
+        if epoch % 5 == 0 or patience_counter >= early_stop_patience:
+            print(f"       Epoch {epoch:02d}/{max_epochs} — train: {train_loss:.4f}, val: {val_loss:.4f}")
+
+        if patience_counter >= early_stop_patience:
+            print(f"       Early stopping at epoch {epoch}")
+            break
+
+    model.load_state_dict(best_state)
+    path = f"{save_dir}/lstm_{task}_{variant}.pth"
+    torch.save(model.state_dict(), path)
+    print(f"     LSTM {task} {variant.upper()} saved -> {path}")
     return model
 
-
 def main():
+    set_seeds()
+
     print("=" * 60)
     print("TASK 6.2: Model Training")
     print("=" * 60)
 
-    save_dir = 'outputs/models'
+    save_dir = "outputs/models"
     os.makedirs(save_dir, exist_ok=True)
 
-    # --- RF/LR k=2 ---
-    print("  Training Random Forest & Logistic Regression (k=2)...")
-    X_k2 = pd.read_pickle("data/features/X_rf_k2.pkl")
-    y_k2 = pd.read_pickle("data/features/y_rf_k2.pkl")
-    rf_k2, lr_k2 = train_rf_lr(X_k2, y_k2, k=2, save_dir=save_dir)
-    print(f"     ✅ RF k=2 and LR k=2 saved")
+    with open("data/features/activity_vocab.json") as f:
+        vocab = json.load(f)
+    vocab_size = vocab["vocab_size"]
 
-    # --- RF/LR k=5 ---
-    print("  Training Random Forest & Logistic Regression (k=5)...")
-    X_k5 = pd.read_pickle("data/features/X_rf_k5.pkl")
-    y_k5 = pd.read_pickle("data/features/y_rf_k5.pkl")
-    rf_k5, lr_k5 = train_rf_lr(X_k5, y_k5, k=5, save_dir=save_dir)
-    print(f"     ✅ RF k=5 and LR k=5 saved")
+    # --- Classical models: one model per k, per variant, per task ---
+    for variant in VARIANTS:
+        print(f"\n  [{variant.upper()}] Classical models...")
+        for k in PREFIX_LENGTHS:
+            train, val, _ = load_split(variant, k)
+            train_outcome_classical(train, val, k, variant, save_dir)
+            train_remaining_classical(train, val, k, variant, save_dir)
 
-    # --- LSTM ---
-    print("  Training LSTM (k=5)...")
-    X_lstm = torch.load("data/features/X_lstm.pt", weights_only=True)
-    y_lstm = torch.load("data/features/y_lstm.pt", weights_only=True)
-    train_lstm(X_lstm, y_lstm, save_dir=save_dir, epochs=5)
-    print(f"     ✅ LSTM saved")
+    # --- LSTM: one model per variant per task (across all k) ---
+    print("\n  LSTM models...")
+    for variant in VARIANTS:
+        for task in ["outcome", "remaining"]:
+            train_lstm(variant, task, vocab_size, save_dir)
 
-    print("  ✅ All models saved to outputs/models/")
-
+    print("\n  All models saved to outputs/models/")
 
 if __name__ == "__main__":
     main()

@@ -78,6 +78,7 @@ def main():
     case_durations['total_days'] = (case_durations['end'] - case_durations['start']).dt.total_seconds() / (24 * 3600)
 
     plt.figure(figsize=(12, 5))
+    # Filter to < 730 days (2 years) to exclude extreme outliers and focus on the main distribution
     plt.hist(case_durations['total_days'][case_durations['total_days'] < 730], bins=30, color='#a02c34', edgecolor='black', alpha=0.7)
     plt.title('Distribution of Total Case Durations (< 2 Years)')
     plt.xlabel('Total Duration (Days)')
@@ -107,6 +108,7 @@ def main():
     # --- D) PERFORMANCE SPECTRUM ---
     print("  4. Generating Performance Spectrum...")
     top_acts = df_sorted['concept:name'].value_counts().head(5).index.tolist()
+    # 150 cases: enough to see patterns without overplotting the spectrum
     sample_cases = df_sorted['case:concept:name'].drop_duplicates().sample(150, random_state=42)
     df_spectrum = df_sorted[df_sorted['case:concept:name'].isin(sample_cases)].copy()
     df_spectrum = df_spectrum[df_spectrum['concept:name'].isin(top_acts)]

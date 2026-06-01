@@ -1,4 +1,4 @@
-"""Task 2: Data Cleaning
+"""Task 3: Data Cleaning
 - Filtering and noise removal
 - Duplicate removal
 - Start/end event selection
@@ -13,7 +13,7 @@ import pandas as pd
 
 def main():
     print("=" * 60)
-    print("TASK 2: Data Cleaning")
+    print("TASK 3: Data Cleaning")
     print("=" * 60)
 
     # 1. Daten laden
@@ -44,10 +44,14 @@ def main():
     cases = df.groupby('case:concept:name')['concept:name'].apply(list).reset_index()
 
     def determine_outcome(activity_list):
-        if 'Payment' in activity_list:
-            return 0
-        elif 'Send for Credit Collection' in activity_list:
+        # Credit Collection wins unconditionally — even if a payment occurred,
+        # the process deviated and debt collectors were involved (label = 1).
+        # Payment wins only if credit collection never happened (label = 0).
+        # Open/running cases (neither event) are excluded from supervised learning.
+        if 'Send for Credit Collection' in activity_list:
             return 1
+        elif 'Payment' in activity_list:
+            return 0
         else:
             return -1
 
