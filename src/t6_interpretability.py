@@ -1,7 +1,7 @@
 """Task 6.4: Interpretability via SHAP
 
 Generates SHAP summary plots for the XGBoost outcome classifiers
-across all prefix lengths k ∈ {2, 3, 5, 8} and both variants (CF, DA).
+across all prefix lengths k ∈ {2, 3, 5} and both variants (CF, DA).
 
 SHAP TreeExplainer is used because XGBoost is a tree ensemble — exact Shapley
 values can be computed efficiently without approximation (Lundberg et al., 2020).
@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import shap
 
-PREFIX_LENGTHS = [2, 3, 5, 8]
+PREFIX_LENGTHS = [2, 3, 5]  # longer prefixes (k≥5) show saturating performance
 VARIANTS = ["cf", "da"]
 
 

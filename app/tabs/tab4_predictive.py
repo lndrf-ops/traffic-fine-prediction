@@ -8,6 +8,17 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
+try:
+    import shap
+except ImportError:
+    shap = None
+
+
+@st.cache_resource
+def _get_explainer(_model):
+    """Cache the SHAP TreeExplainer (expensive to create)."""
+    return shap.TreeExplainer(_model)
+
 ACTIVITIES = [
     "Create Fine",
     "Send Fine",
@@ -38,7 +49,7 @@ VALID_SUCCESSORS = {
 }
 
 # Available prefix lengths (must match trained models)
-AVAILABLE_K = [2, 3, 5, 8]
+AVAILABLE_K = [2, 3, 5]
 
 
 def _best_k(n_events: int) -> int | None:
@@ -63,6 +74,52 @@ def render(models: dict):
     col_in, col_out = st.columns([1, 2])
 
     with col_in:
+        # Variant selection FIRST (stable, not affected by trace changes)
+        variant = st.radio(
+            "Feature variant",
+            ["Control-Flow only", "Data-Aware (+ temporal, amount, …)"],
+            key="variant_radio",
+            help="CF uses only binary activity indicators. DA adds prefix length, duration, amount, points, and other case attributes.",
+        )
+        variant_key = "cf" if variant.startswith("Control") else "da"
+
+        duration_days = 0
+        amount = 35.0
+        points = 0
+        vehicle_class = "A"
+        article = 157.0
+        if variant_key == "da":
+            st.markdown("**Additional attributes:**")
+            duration_days = st.number_input(
+                "Days since case start", min_value=0, max_value=2000, value=0, step=7,
+                help="How many days have elapsed since the first event?",
+            )
+            amount = st.number_input(
+                "Fine amount (€)", min_value=0.0, max_value=500.0, value=35.0, step=5.0,
+                help="Median in dataset: ~94€",
+            )
+            points = st.number_input(
+                "Penalty points", min_value=0, max_value=10, value=0, step=1,
+                help="Range: 0–10",
+            )
+            vehicle_class = st.selectbox(
+                "Vehicle class",
+                options=["A", "C", "M", "R"],
+                index=0,
+                key="vehicle_class_select",
+                format_func=lambda x: {"A": "A – Autoveicoli (Cars)", "C": "C – Camion (Trucks)", "M": "M – Motoveicoli (Motorcycles)", "R": "R – Rimorchi (Trailers)"}[x],
+                help="A = cars (97%), C = trucks, M = motorcycles, R = trailers",
+            )
+            article = st.selectbox(
+                "Traffic article violated",
+                options=[157, 7, 158, 142, 181, 180, 171, 80, 172, 146],
+                index=0,
+                key="article_select",
+                format_func=lambda x: f"Art. {x}" + {157: " (speeding)", 7: " (red light)", 158: " (speeding minor)"}.get(x, ""),
+                help="Top articles by frequency. Art. 157 = speeding (45% of cases)",
+            )
+
+        st.divider()
         st.subheader("Build Case Trace")
 
         # Sequential trace builder
@@ -126,50 +183,6 @@ def render(models: dict):
 
         st.divider()
 
-        variant = st.radio(
-            "Feature variant",
-            ["Control-Flow only", "Data-Aware (+ temporal, amount, …)"],
-            help="CF uses only binary activity indicators. DA adds prefix length, duration, amount, points, and other case attributes.",
-        )
-        variant_key = "cf" if variant.startswith("Control") else "da"
-
-        duration_days = 0
-        amount = 35.0
-        points = 0
-        vehicle_class = "A"
-        article = 157.0
-        notification_type = "P"
-        dismissal = "NIL"
-        if variant_key == "da":
-            st.markdown("**Additional attributes:**")
-            duration_days = st.number_input(
-                "Days since case start", min_value=0, max_value=2000, value=0, step=7,
-                help="How many days have elapsed since the first event?",
-            )
-            amount = st.number_input(
-                "Fine amount (€)", min_value=0.0, max_value=500.0, value=35.0, step=5.0,
-                help="Median in dataset: ~94€",
-            )
-            points = st.number_input(
-                "Penalty points", min_value=0, max_value=10, value=0, step=1,
-                help="Range: 0–10",
-            )
-            vehicle_class = st.selectbox(
-                "Vehicle class",
-                options=["A", "C", "M", "R"],
-                index=0,
-                format_func=lambda x: {"A": "A – Autoveicoli (Cars)", "C": "C – Camion (Trucks)", "M": "M – Motoveicoli (Motorcycles)", "R": "R – Rimorchi (Trailers)"}[x],
-                help="A = cars (97%), C = trucks, M = motorcycles, R = trailers",
-            )
-            article = st.selectbox(
-                "Traffic article violated",
-                options=[157, 7, 158, 142, 181, 180, 171, 80, 172, 146],
-                index=0,
-                format_func=lambda x: f"Art. {x}" + {157: " (speeding)", 7: " (red light)", 158: " (speeding minor)"}.get(x, ""),
-                help="Top articles by frequency. Art. 157 = speeding (45% of cases)",
-            )
-            # notificationType and dismissal removed from feature engineering
-            # (near-constant, redundant with activity indicators)
         predict_clicked = st.button("Predict", type="primary", width="stretch")
 
     with col_out:
@@ -224,6 +237,16 @@ def render(models: dict):
         st.metric("Credit Collection Probability", f"{prob * 100:.1f}%")
         st.progress(float(prob))
 
+        # Prescriptive recommendation
+        THRESHOLD_RED = 0.75
+        THRESHOLD_YELLOW = 0.50
+        if prob >= THRESHOLD_RED:
+            st.error("🔴 **HIGH RISK** — Recommend immediate escalation (payment plan offer).")
+        elif prob >= THRESHOLD_YELLOW:
+            st.warning("🟡 **MEDIUM RISK** — Recommend proactive reminder.")
+        else:
+            st.success("🟢 **LOW RISK** — No intervention required. Case likely resolves via payment.")
+
         # Model info
         with st.expander("Model Details"):
             st.markdown(f"""
@@ -239,10 +262,9 @@ def render(models: dict):
         st.divider()
         st.subheader("Feature Contributions (this prediction)")
         try:
-            import shap
             import matplotlib.pyplot as plt
 
-            explainer = shap.TreeExplainer(model)
+            explainer = _get_explainer(model)
             shap_values = explainer.shap_values(X)
 
             if isinstance(shap_values, list):

@@ -97,9 +97,8 @@ def train_outcome_classical(train: pd.DataFrame, val: pd.DataFrame, k: int, vari
         path = f"{save_dir}/{name}_outcome_{variant}_k{k}.pkl"
         joblib.dump(model, path)
 
-    import json as _json
-    with open(f"{save_dir}/feature_cols_outcome_{variant}_k{k}.json", "w") as _f:
-        _json.dump(fcols, _f)
+    with open(f"{save_dir}/feature_cols_outcome_{variant}_k{k}.json", "w") as f:
+        json.dump(fcols, f)
     print(f"     Outcome classifiers saved ({variant.upper()}, k={k}): majority, logreg, rf, xgb")
 
 # ---------------------------------------------------------------------------
@@ -137,28 +136,15 @@ def train_remaining_classical(train: pd.DataFrame, val: pd.DataFrame, k: int, va
         path = f"{save_dir}/{name}_remaining_{variant}_k{k}.pkl"
         joblib.dump(model, path)
 
-    import json as _json
-    with open(f"{save_dir}/feature_cols_remaining_{variant}_k{k}.json", "w") as _f:
-        _json.dump(fcols, _f)
+    with open(f"{save_dir}/feature_cols_remaining_{variant}_k{k}.json", "w") as f:
+        json.dump(fcols, f)
     print(f"     Remaining-time regressors saved ({variant.upper()}, k={k}): mean, linreg, rf_reg, xgb_reg")
 
 # ---------------------------------------------------------------------------
 # LSTM — shared architecture for both tasks
 # ---------------------------------------------------------------------------
 
-class ProcessLSTM(nn.Module):
-    def __init__(self, vocab_size: int, embedding_dim: int, hidden_dim: int, output_dim: int = 1):
-        super().__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim, batch_first=True)
-        self.dropout = nn.Dropout(0.3)  # regularization
-        self.fc = nn.Linear(hidden_dim, output_dim)
-
-    def forward(self, x):
-        embedded = self.embedding(x)
-        _, (h_n, _) = self.lstm(embedded)
-        out = self.dropout(h_n[-1])
-        return self.fc(out).squeeze(-1)
+from src.models import ProcessLSTM  # shared architecture (single source of truth)
 
 def _load_lstm_data(variant: str, task: str, prefix_lengths: list):
     seqs_df = pd.read_parquet("data/features/sequences.parquet")

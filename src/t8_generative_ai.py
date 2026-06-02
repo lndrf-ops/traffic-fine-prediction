@@ -145,9 +145,9 @@ def main():
     os.makedirs('outputs/plots', exist_ok=True)
     random.seed(42)
 
-    # 1. Load real sequences (one row per case, concept:name is a list of activities)
+    # 1. Load real sequences (one row per case, 'trace' column is a list of activities)
     completed_cases = pd.read_pickle("data/cleaned/completed_cases.pkl")
-    real_sequences = completed_cases["concept:name"].tolist()
+    real_sequences = completed_cases["trace"].tolist()
 
     # 2. Train first-order Markov Model
     print("  Training first-order Markov Chain model...")

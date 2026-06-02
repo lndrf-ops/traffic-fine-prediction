@@ -150,18 +150,7 @@ def eval_classical_remaining(variant: str, k: int, model_dir: str) -> list[dict]
 # LSTM evaluation
 # ---------------------------------------------------------------------------
 
-class ProcessLSTM(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim):
-        super().__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim, batch_first=True)
-        self.dropout = nn.Dropout(0.3)
-        self.fc = nn.Linear(hidden_dim, 1)
-
-    def forward(self, x):
-        embedded = self.embedding(x)
-        _, (h_n, _) = self.lstm(embedded)
-        return self.fc(self.dropout(h_n[-1])).squeeze(-1)
+from src.models import ProcessLSTM  # shared architecture (single source of truth)
 
 
 def eval_lstm(variant: str, task: str, vocab_size: int, model_dir: str) -> list[dict]:
@@ -312,6 +301,8 @@ def assess_overfitting(model_dir: str, vocab_size: int) -> list[dict]:
 
     # --- LSTM: evaluate on train and test sequences ---
     seqs_df = pd.read_parquet("data/features/sequences.parquet")
+    from collections import defaultdict
+    lstm_metrics: dict = defaultdict(dict)
     for variant in VARIANTS:
         for task in ["outcome", "remaining"]:
             path = f"{model_dir}/lstm_{task}_{variant}.pth"
@@ -342,33 +333,17 @@ def assess_overfitting(model_dir: str, vocab_size: int) -> list[dict]:
                         continue
                     yt = y[mask]
                     yp = y_pred_raw[mask]
+                    key = ("lstm", variant, k)
                     if task == "outcome":
                         y_proba = 1 / (1 + np.exp(-yp))
                         auc = float(roc_auc_score(yt, y_proba))
-                        if split_name == "train":
-                            # store temporarily keyed by (variant, task, k)
-                            key = ("lstm", variant, k)
-                            rows.append({"_tmp": True, "_key": key, "_split": "train",
-                                         "_task": task, "_val": auc})
-                        else:
-                            rows.append({"_tmp": True, "_key": key, "_split": "test",
-                                         "_task": task, "_val": auc})
+                        lstm_metrics[(key, task)][split_name] = auc
                     else:
                         mae = float(mean_absolute_error(yt, yp))
-                        key = ("lstm", variant, k)
-                        rows.append({"_tmp": True, "_key": key, "_split": split_name,
-                                     "_task": task, "_val": mae})
+                        lstm_metrics[(key, task)][split_name] = mae
 
-    # Merge train/test LSTM rows into gap records
-    tmp = [r for r in rows if r.get("_tmp")]
-    rows = [r for r in rows if not r.get("_tmp")]
-
-    from collections import defaultdict
-    lstm_vals: dict = defaultdict(dict)
-    for r in tmp:
-        lstm_vals[(r["_key"], r["_task"])][r["_split"]] = r["_val"]
-
-    for (key, task), splits in lstm_vals.items():
+    # Convert collected LSTM train/test metrics into gap records
+    for (key, task), splits in lstm_metrics.items():
         _, variant, k = key
         train_val = splits.get("train")
         test_val = splits.get("test")

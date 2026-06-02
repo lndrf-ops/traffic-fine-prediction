@@ -14,13 +14,15 @@ from src import (
     t1_data_loading,
     t2_descriptive_analysis,
     t3_data_cleaning,
+    t3b_batching_analysis,
     t4_process_discovery,
     t5_conformance_checking,
     t6_feature_engineering,
     t6_train,
     t6_evaluate,
     t6_interpretability,
-    bonus_prescriptive,
+    t7_prescriptive,
+    t8_generative_ai,
 )
 
 
@@ -28,13 +30,15 @@ TASKS = [
     (1, "Data Loading", t1_data_loading),
     (2, "Descriptive Analysis", t2_descriptive_analysis),
     (3, "Data Cleaning", t3_data_cleaning),
+    (3.5, "Batching Analysis", t3b_batching_analysis),
     (4, "Process Discovery", t4_process_discovery),
     (5, "Conformance Checking", t5_conformance_checking),
     (6.1, "Feature Engineering", t6_feature_engineering),
     (6.2, "Model Training", t6_train),
     (6.3, "Model Evaluation", t6_evaluate),
     (6.4, "Interpretability (SHAP)", t6_interpretability),
-    (7, "Bonus: Prescriptive Analytics", bonus_prescriptive),
+    (7, "Prescriptive Analytics", t7_prescriptive),
+    (8, "Generative AI", t8_generative_ai),
 ]
 
 

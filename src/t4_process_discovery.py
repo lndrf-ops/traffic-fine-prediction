@@ -158,13 +158,7 @@ def main():
     with open(f"{save_dir}/petri_net.dot", "w", encoding="utf-8") as f:
         f.write(dot_string)
 
-    # --- F) ORGANIZATIONAL PERSPECTIVE ---
-    print("  6. Checking Organizational Perspective...")
-    if 'org:resource' in df.columns:
-        resource_stats = df['org:resource'].value_counts().head(10)
-        print(f"     Top Resources: {dict(resource_stats)}")
-    else:
-        print("     ⚠ No org:resource column available")
+    # Note: Organizational perspective (resource analysis) is covered in t3b_batching_analysis.
 
     print("  ✅ Process Discovery complete")
 

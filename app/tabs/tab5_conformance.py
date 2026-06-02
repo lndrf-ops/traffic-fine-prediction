@@ -54,14 +54,21 @@ def render(conformance_results: dict | None):
 
     if rules_data:
         df_rules = pd.DataFrame(rules_data)
+        min_rate = df_rules["Compliance Rate"].min()
+        range_start = max(0, min_rate - 0.05)
+        # Color: green ≥99%, orange ≥90%, red <90%
+        df_rules["Status"] = df_rules["Compliance Rate"].apply(
+            lambda v: "✅ Compliant" if v >= 0.99 else ("⚠️ Mild" if v >= 0.9 else "❌ Critical")
+        )
+        color_map = {"✅ Compliant": "#00CC96", "⚠️ Mild": "#FFA15A", "❌ Critical": "#EF553B"}
         fig = px.bar(
             df_rules,
             x="Compliance Rate",
             y="Rule",
             orientation="h",
-            color="Compliance Rate",
-            color_continuous_scale=["#EF553B", "#FFA15A", "#00CC96"],
-            range_x=[0.85, 1.005],
+            color="Status",
+            color_discrete_map=color_map,
+            range_x=[range_start, 1.005],
             title="Compliance Rate per Rule (closer to 1.0 = fully compliant)",
             text=df_rules["Compliance Rate"].map(lambda v: f"{v:.2%}"),
         )
@@ -79,7 +86,7 @@ def render(conformance_results: dict | None):
 
         compliance = rule["compliance_rate"]
         violations = rule.get("violations", 0)
-        icon = "✅" if compliance >= 1.0 else ("⚠️" if compliance >= 0.95 else "❌")
+        icon = "✅" if compliance >= 0.99 else ("⚠️" if compliance >= 0.9 else "❌")
 
         with st.expander(f"{icon} {rule['rule']}  ({compliance:.2%} compliant)"):
             cols = st.columns(3)

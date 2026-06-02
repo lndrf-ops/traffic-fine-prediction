@@ -81,8 +81,12 @@ def main():
     if low_quality_cols:
         print(f"\n  ⚠️  Low-quality columns (fill rate < {LOW_FILL_THRESHOLD}% or ≤1 unique value):")
         for col, profile in low_quality_cols.items():
+            if profile["n_unique"] <= 1:
+                reason = "constant/empty → no predictive value, safe to drop"
+            else:
+                reason = "near-empty → drop unless domain-relevant"
             print(f"    - {col}: {profile['fill_rate_percent']:.2f}% filled, "
-                  f"{profile['n_unique']} unique value(s) → recommended: DROP in t2")
+                  f"{profile['n_unique']} unique value(s) → {reason}")
 
     # 3. Save report
     report = {

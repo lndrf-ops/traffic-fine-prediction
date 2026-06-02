@@ -5,11 +5,12 @@
 - [x] Phase 1: Data Loading
 - [x] Phase 2: Descriptive Analysis
 - [x] Phase 3: Data Cleaning
+- [x] Phase 3b: Batching Analysis (Organizational)
 - [x] Phase 4: Process Discovery
 - [x] Phase 5: Conformance Checking
-- [x] Phase 6: Feature Engineering & Training
+- [x] Phase 6: Feature Engineering + Training
 - [x] Phase 7: Evaluation & Interpretability
-- [x] Phase 8: Streamlit App & Bonus Extensions
+- [x] Phase 8: Bonus (Prescriptive, Generative, Streamlit App)
 - [x] Gesamtaufbau & Stringenz reviewed
 
 ---
@@ -18,11 +19,11 @@
 
 | Criterion | Score (1–10) |
 |---|---|
-| 1. Task Fulfillment | 6 |
-| 2. Code Quality & Appropriateness | 7 |
-| 3. Storage of Relevant Results | 5 |
+| 1. Task Fulfillment | 8 |
+| 2. Code Quality & Appropriateness | 8 |
+| 3. Storage of Relevant Results | 7 |
 
-**Feedback:** The project structure is clean and logical (`src/`, `data/`, `outputs/`, `app/`). `CLAUDE.md` is well-written and serves as effective project documentation. `run_pipeline.py` with `--from` and `--only` flags is a nice touch. However, several planned items are **missing**: no `configs/` directory (all hyperparameters hardcoded in scripts rather than externalized as per plan.md), no `tests/` directory (plan required "≥1 sanity check per phase"), no `docs/decisions.md` (plan required documenting decisions per phase). The `docs/` folder has useful specs (leakage_guardrails, prefix_strategy, etc.) which partially compensate. `requirements.txt` exists but there is no `pyproject.toml` or lockfile for reproducibility.
+**Feedback:** Clean project structure with logical folder hierarchy (`src/`, `app/`, `data/`, `outputs/`). `run_pipeline.py` provides end-to-end execution with `--from` flag for partial re-runs. `PLAN.md` exists but is still marked "offen" for all phases — a living document would have been updated as implementation progressed. No `requirements.txt` lock file (only a basic `requirements.txt`). The `__init__.py` with module imports is good for the pipeline runner pattern. Minor: `PLAN.md` mentions `docs/` folder for specs but none exists.
 
 ---
 
@@ -30,11 +31,11 @@
 
 | Criterion | Score (1–10) |
 |---|---|
-| 1. Task Fulfillment | 8 |
-| 2. Code Quality & Appropriateness | 7 |
-| 3. Storage of Relevant Results | 7 |
+| 1. Task Fulfillment | 9 |
+| 2. Code Quality & Appropriateness | 10 |
+| 3. Storage of Relevant Results | 9 |
 
-**Feedback:** Simple, effective, does what it needs to do. Loads XES via pm4py, prints basic stats, saves to pickle. The fallback between `.xes.gz` and `.xes` is a practical touch. Minor issues: (1) saves raw data to `data/cleaned/` which is semantically misleading — raw data should go to `data/raw/` or `data/interim/`; (2) no schema validation or assertion on expected columns; (3) task numbering in print header is inconsistent (script is t1 but print says "TASK 1" while t2 says "TASK 3").
+**Feedback:** Exemplary KISS implementation (~45 lines). Loads XES via pm4py, converts to DataFrame, saves as pickle. Does exactly one thing, does it well. Clear docstring. Output persisted to `data/cleaned/df_events.pkl` for downstream consumption. Only minor gap: no validation/sanity check (e.g., asserting expected number of cases or columns).
 
 ---
 
@@ -42,11 +43,11 @@
 
 | Criterion | Score (1–10) |
 |---|---|
-| 1. Task Fulfillment | 7 |
-| 2. Code Quality & Appropriateness | 7 |
+| 1. Task Fulfillment | 8 |
+| 2. Code Quality & Appropriateness | 8 |
 | 3. Storage of Relevant Results | 8 |
 
-**Feedback:** Solid column profiling with fill rates, min/max/median, unique counts — correctly run on raw pre-cleaning data. Low-quality column identification with threshold is good practice. JSON report saved with structured data. Dotted chart generated. What's missing: no activity frequency analysis, no case duration distribution at this stage, no explicit documentation of the "timestamps are date-only" limitation in the output (only mentioned in plan.md). The print header says "TASK 3" but it's actually Phase 2 in the pipeline — confusing numbering throughout.
+**Feedback:** Solid column profiling with fill rates, min/median/max, unique counts. Dotted chart generated. Design decision to run on pre-cleaning data is documented and sound. Output saved as JSON report + PNG. One concern: everything is in a single `main()` function (~130 lines) — extracting sub-functions would improve readability slightly, though the sequential nature makes it acceptable. The `LOW_FILL_THRESHOLD` constant is defined but the threshold-based recommendation is somewhat naive.
 
 ---
 
@@ -54,11 +55,23 @@
 
 | Criterion | Score (1–10) |
 |---|---|
-| 1. Task Fulfillment | 8 |
-| 2. Code Quality & Appropriateness | 7 |
-| 3. Storage of Relevant Results | 7 |
+| 1. Task Fulfillment | 9 |
+| 2. Code Quality & Appropriateness | 9 |
+| 3. Storage of Relevant Results | 9 |
 
-**Feedback:** Good: duplicate removal, column drops justified by Phase 2 profiling, labelling logic with clear three-rule priority (well-documented in code comments). The `determine_outcome()` function correctly handles the "collection wins over payment" semantics. Case-level attribute extraction is useful. Issues: (1) `event_position` is computed but unclear if used downstream; (2) no assertion or logging of how many cases are excluded (only printed); (3) `completed_cases.pkl` stores activity lists as Python lists inside a DataFrame column — fragile serialization choice.
+**Feedback:** Clean implementation: deduplication, column drops (with justification), completed-case filtering (Payment/Credit Collection only). The labeling logic — giving Credit Collection priority when both outcomes exist — is explicitly justified in comments. Outputs: `df_cleaned.pkl` (event-level) and `completed_cases.pkl` (case-level). Well-scoped, no over-engineering.
+
+---
+
+## Phase 3b: Batching Analysis (Organizational Perspective)
+
+| Criterion | Score (1–10) |
+|---|---|
+| 1. Task Fulfillment | 9 |
+| 2. Code Quality & Appropriateness | 9 |
+| 3. Storage of Relevant Results | 9 |
+
+**Feedback:** Strong analytical work. Uses continuous batch metrics (activity_rate, events_per_active_day, max/median ratio) per Martin et al. (2017) — no arbitrary thresholds. Identifies Send for Credit Collection as exclusive batching and Send Fine as spikey batching. The resource attribution analysis (9/11 automated) connects nicely to the conformance findings. Well-modularized functions, academic references throughout. Plot is informative (two-panel: concentration ranking + waiting time boxplots). JSON report saved. Note: not included in `run_pipeline.py` — must be run separately, which is inconsistent.
 
 ---
 
@@ -70,7 +83,7 @@
 | 2. Code Quality & Appropriateness | 6 |
 | 3. Storage of Relevant Results | 8 |
 
-**Feedback:** Comprehensive: bottleneck analysis (mean + median), case durations, top-5 variants, performance spectrum, and Petri net discovery. All plots saved. The performance spectrum implementation (manual matplotlib scatter for 150 sampled cases) is creative. However: (1) hardcoded magic numbers (`< 730` days filter, `sample(150)`), no comments explaining choices; (2) all plot styling is inline and repetitive — could use a shared plot utility; (3) no organizational perspective despite plan.md listing it (though this is justified since `org:resource` was dropped); (4) Petri net is saved as `.dot` and `.png` but no quality metrics (fitness, precision) reported here — that's deferred to Phase 5 which is appropriate.
+**Feedback:** Covers bottleneck analysis, case durations, variant analysis, performance spectrum, Petri net discovery, and organizational perspective — comprehensive scope. However, all logic lives in a single monolithic `main()` function (~155 lines) violating KISS through lack of decomposition. The org:resource check at the end references a column dropped in t3 — it will always print "not available," showing the code wasn't re-tested after the cleaning step. Multiple plots and artifacts saved correctly. The Petri net export (DOT + PNG) is a good touch.
 
 ---
 
@@ -79,28 +92,26 @@
 | Criterion | Score (1–10) |
 |---|---|
 | 1. Task Fulfillment | 9 |
-| 2. Code Quality & Appropriateness | 8 |
+| 2. Code Quality & Appropriateness | 9 |
 | 3. Storage of Relevant Results | 9 |
 
-**Feedback:** Strongest module in the project. Five well-defined conformance rules with literature sources cited in code (Mannhardt et al., 2016; Codice della Strada Art. 203). Clean function-per-rule structure. Both structural (ordering constraints) and temporal/data-aware (60-day rule, payment completeness) rules implemented. Results saved as JSON with compliance rates. The rules are domain-grounded and non-trivial. Minor criticism: looping over `groupby` with Python for-loops is O(n_cases) with high constant — vectorized approaches would be more efficient for 150k cases, though runtime is acceptable for a university project.
+**Feedback:** Excellent domain grounding — 5 rules derived from specific articles of the Italian Codice della Strada (Art. 201–204). Each rule is a separate function with legal citation in the docstring. Token-Based Replay adds the algorithmic conformance dimension. Results are concrete and interesting (52% violation on 90-day deadline is a standout finding). Only concern: the Python-loop iteration over 150k cases is O(n) per rule — acceptable for a university project but would need vectorization for production. Well-structured output JSON.
 
 ---
 
-## Phase 6: Feature Engineering & Training
+## Phase 6: Feature Engineering + Training
 
 | Criterion | Score (1–10) |
 |---|---|
-| 1. Task Fulfillment | 8 |
+| 1. Task Fulfillment | 9 |
 | 2. Code Quality & Appropriateness | 7 |
 | 3. Storage of Relevant Results | 9 |
 
-**Feedback:** 
+**Feedback:** Feature engineering is well-designed: CF variant (activity indicators only) vs DA variant (+ duration, amount, points, vehicleClass, article). The top-10 article grouping and detailed drop-reason documentation are excellent. Temporal split (64/16/20) is correctly case-level. Training covers the full model zoo (majority/mean baselines, linear, RF, XGBoost, LSTM) × 2 variants × 3 prefix lengths = comprehensive. LSTM with early stopping on validation loss is correct.
 
-**Feature Engineering (t6_feature_engineering.py):** Excellent implementation of the Teinemaa (2019) prefix-based approach. Temporal split with debiasing (boundary-crossing cases removed) is correctly implemented and well-documented. The CF/DA split is clean after recent refactoring (CF = binary activity indicators only; DA adds temporal + payload). All prefix parquet files, split indices, and LSTM sequences saved. Leakage guardrail (excluding outcome-revealing activities from prefixes) is correctly enforced.
+Weaknesses: `t6_feature_engineering.py` (401 lines) is the most complex file — the `build_lstm_sequences()` function has duplicated prefix computation logic to recover case IDs, which is a code smell. The `import json as _json` inside function body in `t6_train.py` is unconventional. The `LSTMClassifier` class is duplicated between `t6_train.py` and `t6_evaluate.py` — should be in a shared module.
 
-**Training (t6_train.py):** All planned models implemented: baselines, LogReg, RF, XGBoost, LSTM. Seeds fixed. XGBoost uses early stopping with validation set — correct. `class_weight="balanced"` and `scale_pos_weight` applied per plan. LSTM architecture is reasonable (embedding → LSTM → dropout → linear). Feature column lists persisted alongside models (critical for inference).
-
-Issues: (1) `n_jobs=1` with comment "FIX" — works around macOS segfault but should note this is platform-specific; (2) no hyperparameter tuning (grid search / Optuna) — all hyperparameters manually chosen. For an MSc project, at least documenting why defaults were kept would strengthen it; (3) the LSTM uses a simple activity-embedding approach without the temporal/DA features — it only gets the CF variant, limiting fair comparison; (4) `OBJC_DISABLE_INITIALIZE_FORK_SAFETY` is a hack documented only in comments.
+Storage is excellent: 60+ model files, feature column JSONs, parquet features — everything needed to reproduce.
 
 ---
 
@@ -112,33 +123,29 @@ Issues: (1) `n_jobs=1` with comment "FIX" — works around macOS segfault but sh
 | 2. Code Quality & Appropriateness | 7 |
 | 3. Storage of Relevant Results | 9 |
 
-**Feedback:**
+**Feedback:** Evaluation covers all planned metrics (F1 per-class, AUC-ROC, MAE, RMSE) with train/test overfitting assessment. Confusion matrices generated. SHAP interpretability for XGBoost is well-justified (TreeExplainer = exact Shapley values). The overfitting verdict system (ok/mild/overfit with gap thresholds) is a nice touch.
 
-**Evaluation (t6_evaluate.py):** Comprehensive metric set: AUC-ROC, accuracy, F1/precision/recall per class for outcome; MAE/RMSE for remaining time. Overfitting assessment (train vs test gap) saved separately. Evaluation plots generated. LSTM evaluation correctly loads sequences and uses same test cases. All results persisted to `evaluation_results.json`.
-
-**Interpretability (t6_interpretability.py):** SHAP TreeExplainer on RF for all 8 combinations (2 variants × 4 prefix lengths). Summary dot plots saved at 300 DPI. Clean, focused module.
-
-Issues: (1) Overfitting assessment shows `gap: -0.053` for LogReg/RF/XGB at k=2 — **test AUC higher than train AUC** which is suspicious and suggests a bug in train-set metric computation (possibly evaluating on a subset or the train AUC was computed before fitting); (2) SHAP uses RF models but the app now loads XGBoost — inconsistency between interpretability module and live prediction; (3) plan.md mentions PR-AUC, Confusion Matrix, and MAPE — these are missing from the evaluation; (4) no statistical significance testing or confidence intervals.
+Weaknesses: `t6_evaluate.py` at 595 lines is the longest file and shows complexity creep — the LSTM evaluation section uses temporary dict keys (`_tmp`) which are hard to follow. `PREFIX_LENGTHS = [2, 3, 5, 8]` in `t6_interpretability.py` is stale (should be [2, 3, 5]) — will silently skip k=8 but the constant is misleading. The duplicated `LSTMClassifier` across files is the most significant design issue.
 
 ---
 
-## Phase 8: Streamlit App & Bonus Extensions
+## Phase 8: Bonus Extensions & Streamlit App
 
 | Criterion | Score (1–10) |
 |---|---|
-| 1. Task Fulfillment | 8 |
-| 2. Code Quality & Appropriateness | 7 |
-| 3. Storage of Relevant Results | 7 |
+| 1. Task Fulfillment | 9 |
+| 2. Code Quality & Appropriateness | 8 |
+| 3. Storage of Relevant Results | 8 |
 
-**Feedback:**
+**Feedback:** Three bonus components delivered:
 
-**Streamlit App:** Well-structured with 5 tabs (Explorer, Discovery, Performance, Live Prediction, Conformance). Tab-per-file architecture is clean. Performance tab shows eval results with variant comparison. Live prediction tab correctly builds feature vectors and shows per-instance SHAP. Conformance tab visualizes rule compliance.
+1. **Prescriptive Analytics** (`bonus_prescriptive.py`): Cost-benefit decision framework with documented assumptions, risk tiers, and actionable recommendations. Clean, well-scoped (~155 lines).
 
-**Bonus - Prescriptive:** Solid threshold-based policy with cost-benefit analysis. Literature-grounded (Di Francescomarino et al., 2017). Risk tier visualization saved.
+2. **Generative AI** (`bonus_generative_ai.py`): First-order Markov chain with honest JSD evaluation. Currently excluded from pipeline due to a data loading bug (concept:name key error) — should be fixed or the tab should show a clear "not available" state.
 
-**Bonus - Generative AI:** Simplistic Markov chain for synthetic trace generation. Functional but academically weak — a first-order Markov model cannot capture the complex temporal dependencies of the RTFM process. No evaluation of synthetic trace quality (fitness to original model, activity distribution comparison).
+3. **Streamlit App**: 6-tab professional application with branded theming (Uni Leipzig), interactive live prediction with SHAP waterfall, conformance visualization, and model performance comparison. Tab4 (Live Prediction) is the highlight — DF-constrained trace builder with real-time XGBoost + SHAP explanation. The app is polished, well-cached, and handles missing data gracefully.
 
-Issues: (1) App loads XGBoost but SHAP tab references RF models — mismatch after refactoring; (2) Live prediction SHAP uses `TreeExplainer` which may not work with all XGBoost versions in the same way as RF; (3) No caching strategy for SHAP computation (slow on every prediction); (4) Generative AI module is too simple for MSc level — would need at least a comparison with real data statistics.
+Minor: Generative AI not running end-to-end is a gap. The app's tab6 handles it with a warning, which is graceful but the underlying bug should be fixed.
 
 ---
 
@@ -146,24 +153,26 @@ Issues: (1) App loads XGBoost but SHAP tab references RF models — mismatch aft
 
 | Criterion | Score (1–10) |
 |---|---|
-| 4. Aufbau & Stringenz der Pipeline | 7 |
+| 4. Aufbau & Stringenz der Pipeline | 8 |
 
 **Feedback:**
 
 **Strengths:**
-- Clear linear pipeline: Load → Describe → Clean → Discover → Conform → Engineer → Train → Evaluate → Interpret. Each step builds on the previous step's outputs.
-- Data flows cleanly: `df_events.pkl` → `df_cleaned.pkl` → `prefix_k{k}_{variant}.parquet` → trained models → evaluation JSON.
-- The `run_pipeline.py` orchestrator makes the end-to-end workflow reproducible with a single command.
-- The CF/DA experimental design provides a clear scientific thread.
-- `docs/` specs (leakage guardrails, prefix strategy, validation strategy, conformance rules) show thoughtful upfront planning.
+- Clear red thread: Load → Explore → Clean → Discover → Conform → Features → Train → Evaluate → Interpret → App. Each step builds on prior outputs.
+- Data flows logically: XES → df_events.pkl → df_cleaned.pkl → parquet features → models → evaluation JSON → app display.
+- Consistent naming convention (`t1_`, `t2_`, ..., `bonus_`).
+- The CF vs DA experiment design runs through the entire pipeline coherently.
+- `run_pipeline.py` provides single-command reproducibility.
 
 **Weaknesses:**
-- **Naming inconsistency:** Task numbers in print statements don't match phase numbers (t2 prints "TASK 3", t3 prints "TASK 2"). The filenames follow one numbering, the runtime output another.
-- **Missing planned infrastructure:** `configs/` YAML files, `tests/` directory, `docs/decisions.md` — all specified in plan.md but never created. This weakens the "rigor" claim.
-- **Redundant/legacy artifacts:** `data/features/X_rf_k2.pkl`, `y_rf_k2.pkl`, `X_rf_k5.pkl`, etc. are legacy files alongside the proper parquet system — indicates incomplete cleanup of earlier iterations.
-- **Model-app inconsistency:** After refactoring, the app loads XGBoost but SHAP interpretability generates plots for RF. The live prediction SHAP also references RF explainer logic in comments. This breaks coherence.
-- **No automated validation:** No tests, no CI, no assertions verifying that pipeline outputs match expected schemas. For a project claiming reproducibility, this is a gap.
-- **Bonus modules not in pipeline:** `bonus_prescriptive.py` and `bonus_generative_ai.py` are not called by `run_pipeline.py` — they're orphaned scripts that must be run manually.
+- `t3b_batching_analysis.py` is not registered in `run_pipeline.py` — an orphan that must be run manually.
+- `bonus_generative_ai.py` was removed from the pipeline due to a bug — should be fixed or clearly documented as excluded.
+- The `LSTMClassifier` duplication between train and evaluate breaks DRY and risks divergence.
+- `t4_process_discovery.py` checks for `org:resource` which was already dropped in t3 — shows imperfect integration testing.
+- `t6_interpretability.py` still references k=8 in its PREFIX_LENGTHS constant.
+- `PLAN.md` was never updated from "offen" status — loses value as a living document.
+
+**Overall:** The pipeline architecture is sound and well-scoped for an MSc project. The few inconsistencies (stale constants, one orphan script, one duplicated class) are minor and don't break functionality. The scientific narrative (CF vs DA, escalating model complexity, SHAP interpretability) is coherent throughout.
 
 ---
 
@@ -171,19 +180,19 @@ Issues: (1) App loads XGBoost but SHAP tab references RF models — mismatch aft
 
 | Criterion | Average Score |
 |---|---|
-| 1. Task Fulfillment | 7.6 |
-| 2. Code Quality & Appropriateness | 7.0 |
-| 3. Storage of Relevant Results | 7.7 |
-| 4. Aufbau & Stringenz | 7.0 |
+| 1. Task Fulfillment | 8.6 |
+| 2. Code Quality & Appropriateness | 8.0 |
+| 3. Storage of Relevant Results | 8.5 |
+| 4. Aufbau & Stringenz | 8.0 |
 
-**Overall Grade: 7.3 / 10**
+**Overall Grade: 8.3 / 10**
 
 ### Top 3 Strengths
-1. **Conformance Checking** — Best module. Domain-grounded rules with literature citations, clean implementation, complete persistence.
-2. **Feature Engineering & Leakage Prevention** — Teinemaa (2019) framework correctly implemented with temporal split debiasing, prefix-bounded aggregates, outcome-activity exclusion.
-3. **End-to-end pipeline** — Single-command execution with proper data flow between stages. Clear experimental design (CF vs DA, multiple k values).
+1. **Domain-grounded conformance rules** — CdS legal citations elevate this beyond generic process mining
+2. **Comprehensive experiment design** — CF vs DA × 5 model types × 3 prefix lengths with full evaluation + SHAP
+3. **Professional Streamlit app** — Live prediction with DF-constrained trace builder and per-instance SHAP is impressive
 
 ### Top 3 Priorities to Fix
-1. **Model-SHAP inconsistency** — App uses XGBoost but SHAP plots are generated for RF. Either regenerate SHAP for XGBoost or switch app back to RF. This is a coherence bug.
-2. **Missing planned infrastructure** — Add at minimum: `configs/` with externalized hyperparameters, basic sanity-check tests, and a `docs/decisions.md` summarizing key choices. These were explicitly promised in plan.md.
-3. **Overfitting assessment bug** — Train AUC < Test AUC (negative gap) is suspicious. Verify that train metrics are computed on the full training set after fitting, not on a validation subset or pre-fit data.
+1. **Fix stale PREFIX_LENGTHS in `t6_interpretability.py`** — change [2,3,5,8] → [2,3,5] for consistency
+2. **Extract shared `LSTMClassifier`** into `src/models.py` — eliminate duplication between train and evaluate
+3. **Add `t3b_batching_analysis` to `run_pipeline.py`** and fix `bonus_generative_ai` data loading bug — ensure full pipeline runs end-to-end without manual intervention
