@@ -67,7 +67,7 @@ def render(conformance_results: dict | None):
         )
         fig.update_traces(textposition="outside")
         fig.update_layout(coloraxis_showscale=False, yaxis_title="")
-        st.plotly_chart(fig, use_container_width=True, key="chart_compliance")
+        st.plotly_chart(fig, width="stretch", key="chart_compliance")
 
     # --- Detail table ---
     st.subheader("Detailed Rule Results")

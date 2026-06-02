@@ -29,7 +29,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, TensorDataset
 from xgboost import XGBClassifier, XGBRegressor
 
-PREFIX_LENGTHS = [2, 3, 5, 8]
+PREFIX_LENGTHS = [2, 3, 5]  # longer prefixes (k≥5) show saturating performance
 VARIANTS = ["cf", "da"]
 SEED = 42
 
@@ -97,7 +97,9 @@ def train_outcome_classical(train: pd.DataFrame, val: pd.DataFrame, k: int, vari
         path = f"{save_dir}/{name}_outcome_{variant}_k{k}.pkl"
         joblib.dump(model, path)
 
-    joblib.dump(fcols, f"{save_dir}/feature_cols_outcome_{variant}_k{k}.json")
+    import json as _json
+    with open(f"{save_dir}/feature_cols_outcome_{variant}_k{k}.json", "w") as _f:
+        _json.dump(fcols, _f)
     print(f"     Outcome classifiers saved ({variant.upper()}, k={k}): majority, logreg, rf, xgb")
 
 # ---------------------------------------------------------------------------
@@ -135,7 +137,9 @@ def train_remaining_classical(train: pd.DataFrame, val: pd.DataFrame, k: int, va
         path = f"{save_dir}/{name}_remaining_{variant}_k{k}.pkl"
         joblib.dump(model, path)
 
-    joblib.dump(fcols, f"{save_dir}/feature_cols_remaining_{variant}_k{k}.json")
+    import json as _json
+    with open(f"{save_dir}/feature_cols_remaining_{variant}_k{k}.json", "w") as _f:
+        _json.dump(fcols, _f)
     print(f"     Remaining-time regressors saved ({variant.upper()}, k={k}): mean, linreg, rf_reg, xgb_reg")
 
 # ---------------------------------------------------------------------------

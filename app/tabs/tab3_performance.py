@@ -80,13 +80,13 @@ def render(eval_results):
             y="label",
             orientation="h",
             color="variant",
-            color_discrete_map={"cf": "#636EFA", "da": "#EF553B"},
+            color_discrete_map={"cf": "#8AC2D1", "da": "#B02F2C"},
             title=f"F1 Score (Collection class) — k={ref_k}",
             labels={"f1_collection": "F1 Score", "label": ""},
             range_x=[0, 1],
         )
         fig_f1.update_layout(showlegend=False)
-        st.plotly_chart(fig_f1, use_container_width=True, key="chart_f1_overall")
+        st.plotly_chart(fig_f1, width="stretch", key="chart_f1_overall")
 
         # Overall metrics table
         overall_cols = ["label", "accuracy", "auc_roc"]
@@ -95,7 +95,7 @@ def render(eval_results):
         df_overall = df_overall.set_index("Model").sort_values("AUC-ROC", ascending=False)
         for col in df_overall.columns:
             df_overall[col] = df_overall[col].apply(lambda x: f"{x:.4f}" if isinstance(x, float) else x)
-        st.dataframe(df_overall, use_container_width=True)
+        st.dataframe(df_overall, width="stretch")
 
     with tab_collection:
         fig_coll = px.bar(
@@ -104,13 +104,13 @@ def render(eval_results):
             y="label",
             orientation="h",
             color="variant",
-            color_discrete_map={"cf": "#636EFA", "da": "#EF553B"},
+            color_discrete_map={"cf": "#8AC2D1", "da": "#B02F2C"},
             title=f"F1 Score — Credit Collection — k={ref_k}",
             labels={"f1_collection": "F1", "label": ""},
             range_x=[0, 1],
         )
         fig_coll.update_layout(showlegend=False)
-        st.plotly_chart(fig_coll, use_container_width=True, key="chart_f1_coll")
+        st.plotly_chart(fig_coll, width="stretch", key="chart_f1_coll")
 
         coll_cols = ["label", "f1_collection", "precision_collection", "recall_collection"]
         available = [c for c in coll_cols if c in outcome_k.columns]
@@ -118,7 +118,7 @@ def render(eval_results):
         df_coll = df_coll.set_index("Model").sort_values("F1", ascending=False)
         for col in df_coll.columns:
             df_coll[col] = df_coll[col].apply(lambda x: f"{x:.4f}" if isinstance(x, float) else x)
-        st.dataframe(df_coll, use_container_width=True)
+        st.dataframe(df_coll, width="stretch")
         st.caption("Precision = of flagged cases, how many are truly collection. Recall = of actual collection cases, how many are caught.")
 
     with tab_payment:
@@ -131,19 +131,19 @@ def render(eval_results):
                 y="label",
                 orientation="h",
                 color="variant",
-                color_discrete_map={"cf": "#636EFA", "da": "#EF553B"},
+                color_discrete_map={"cf": "#8AC2D1", "da": "#B02F2C"},
                 title=f"F1 Score — Payment — k={ref_k}",
                 labels={"f1_payment": "F1", "label": ""},
                 range_x=[0, 1],
             )
             fig_pay.update_layout(showlegend=False)
-            st.plotly_chart(fig_pay, use_container_width=True, key="chart_f1_pay")
+            st.plotly_chart(fig_pay, width="stretch", key="chart_f1_pay")
 
             df_pay = outcome_k[available].copy().rename(columns={"label": "Model", "f1_payment": "F1", "precision_payment": "Precision", "recall_payment": "Recall"})
             df_pay = df_pay.set_index("Model").sort_values("F1", ascending=False)
             for col in df_pay.columns:
                 df_pay[col] = df_pay[col].apply(lambda x: f"{x:.4f}" if isinstance(x, float) else x)
-            st.dataframe(df_pay, use_container_width=True)
+            st.dataframe(df_pay, width="stretch")
             st.caption("Precision = of cases predicted as payment, how many truly are. Recall = of actual payment cases, how many are correctly identified.")
         else:
             st.info("Payment class metrics not available. Re-run the evaluation: `python -m src.t6_evaluate`")
@@ -159,8 +159,8 @@ def render(eval_results):
             index=["model", "variant"], columns="k", values="f1_collection"
         ).round(4)
         pivot.columns = [f"k={c}" for c in pivot.columns]
-        pivot.index = [f"{m.upper()} ({v.upper()})" for m, v in pivot.index]
-        st.dataframe(pivot, use_container_width=True)
+        pivot.index = [f"{model_names.get(m, m)} ({variant_names.get(v, v)})" for m, v in pivot.index]
+        st.dataframe(pivot, width="stretch")
 
     # ─── Remaining Time Prediction ──────────────────────────────────────────
     st.markdown("---")
@@ -172,7 +172,7 @@ def render(eval_results):
     st.markdown(
         '<span title="MAE = Mean Absolute Error: average number of days the prediction is off. '
         'RMSE = Root Mean Squared Error: penalizes large errors more heavily than MAE.">'
-        '💡 Hover for metric explanation</span>',
+        '</span>',
         unsafe_allow_html=True,
     )
 
@@ -192,12 +192,12 @@ def render(eval_results):
         y="label",
         orientation="h",
         color="variant",
-        color_discrete_map={"cf": "#636EFA", "da": "#EF553B"},
+        color_discrete_map={"cf": "#8AC2D1", "da": "#B02F2C"},
         title=f"MAE (days) — k={ref_k_r}",
         labels={"mae_days": "MAE (days)", "label": ""},
     )
     fig_mae.update_layout(showlegend=False)
-    st.plotly_chart(fig_mae, use_container_width=True, key="chart_mae")
+    st.plotly_chart(fig_mae, width="stretch", key="chart_mae")
 
     # MAE table
     mae_cols = ["label", "mae_days"]
@@ -208,15 +208,15 @@ def render(eval_results):
     mae_df = mae_df.set_index("Model").sort_values("MAE (days)")
     for col in mae_df.columns:
         mae_df[col] = mae_df[col].apply(lambda x: f"{x:.1f}" if isinstance(x, float) else x)
-    st.dataframe(mae_df, use_container_width=True)
+    st.dataframe(mae_df, width="stretch")
 
     with st.expander("📋 Detailed: All prefix lengths"):
         pivot_r = remaining.pivot_table(
             index=["model", "variant"], columns="k", values="mae_days"
         ).round(1)
         pivot_r.columns = [f"k={c}" for c in pivot_r.columns]
-        pivot_r.index = [f"{m.upper()} ({v.upper()})" for m, v in pivot_r.index]
-        st.dataframe(pivot_r, use_container_width=True)
+        pivot_r.index = [f"{model_names.get(m, m)} ({variant_names.get(v, v)})" for m, v in pivot_r.index]
+        st.dataframe(pivot_r, width="stretch")
 
     # ─── Overfitting Assessment ─────────────────────────────────────────────
     st.markdown("---")
@@ -245,7 +245,13 @@ def render(eval_results):
         with st.expander("Details: Mild overfitting cases"):
             mild = [r for r in overfit_data if r["verdict"] == "mild"]
             if mild:
-                st.dataframe(pd.DataFrame(mild), use_container_width=True)
+                df_mild = pd.DataFrame(mild)
+                if "model" in df_mild.columns and "variant" in df_mild.columns:
+                    df_mild["model"] = df_mild.apply(
+                        lambda r: f"{model_names.get(r['model'], r['model'])} ({variant_names.get(r['variant'], r['variant'])})", axis=1
+                    )
+                    df_mild = df_mild.drop(columns=["variant"], errors="ignore")
+                st.dataframe(df_mild, width="stretch")
             else:
                 st.info("No mild cases.")
     else:

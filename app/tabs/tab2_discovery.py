@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from theme import COLOR_PALETTE
 import os
 
 def render(df_raw):
@@ -31,12 +32,12 @@ def render(df_raw):
             orientation='h',
             color='Days_mean',
             hover_data=['Cases'],
-            color_continuous_scale='Reds',
+            color_continuous_scale=[[0, COLOR_PALETTE[4]], [1, COLOR_PALETTE[0]]],
             title="Top 10 Bottlenecks (Mean)"
         )
         fig_bottle_mean.update_layout(yaxis={'categoryorder':'total ascending'})
         fig_bottle_mean.update_traces(hovertemplate='%{y}<br>Days (avg): %{x:.2f}<br>Cases: %{customdata[0]}<extra></extra>')
-        st.plotly_chart(fig_bottle_mean, use_container_width=True, key="chart_bottlenecks_mean")
+        st.plotly_chart(fig_bottle_mean, width="stretch", key="chart_bottlenecks_mean")
 
         fig_bottle_median = px.bar(
             bottlenecks_median,
@@ -45,12 +46,12 @@ def render(df_raw):
             orientation='h',
             color='Days_median',
             hover_data=['Cases'],
-            color_continuous_scale='Blues',
+            color_continuous_scale=[[0, COLOR_PALETTE[5]], [1, COLOR_PALETTE[1]]],
             title="Top 10 Bottlenecks (Median)"
         )
         fig_bottle_median.update_layout(yaxis={'categoryorder':'total ascending'})
         fig_bottle_median.update_traces(hovertemplate='%{y}<br>Median days: %{x:.2f}<br>Cases: %{customdata[0]}<extra></extra>')
-        st.plotly_chart(fig_bottle_median, use_container_width=True, key="chart_bottlenecks_median")
+        st.plotly_chart(fig_bottle_median, width="stretch", key="chart_bottlenecks_median")
 
         st.divider()
 
@@ -62,7 +63,7 @@ def render(df_raw):
         fig_dc = px.scatter(df_dc, x="time:timestamp", y="case:concept:name", color="concept:name", hover_data=["amount"], title="Dotted Chart (sample of 1000 cases)")
         fig_dc.update_yaxes(showticklabels=False, title_text="Cases")
         fig_dc.update_traces(marker=dict(size=5, opacity=0.8))
-        st.plotly_chart(fig_dc, use_container_width=True, key="chart_dotted_chart")
+        st.plotly_chart(fig_dc, width="stretch", key="chart_dotted_chart")
 
         st.divider()
 
@@ -75,10 +76,10 @@ def render(df_raw):
         df_ps = df_ps.sort_values(by=['case:concept:name', 'time:timestamp'])
         df_ps['Activity'] = pd.Categorical(df_ps['concept:name'], categories=top_acts, ordered=True)
         
-        fig_ps = px.line(df_ps, x="time:timestamp", y="Activity", line_group="case:concept:name", color_discrete_sequence=['#a02c34'], markers=True, title="Performance Spectrum")
-        fig_ps.update_traces(line=dict(width=1, color='rgba(160, 44, 52, 0.4)'), marker=dict(size=6, opacity=0.8, color='#a02c34'))
+        fig_ps = px.line(df_ps, x="time:timestamp", y="Activity", line_group="case:concept:name", color_discrete_sequence=[COLOR_PALETTE[0]], markers=True, title="Performance Spectrum")
+        fig_ps.update_traces(line=dict(width=1, color='rgba(176, 47, 44, 0.4)'), marker=dict(size=6, opacity=0.8, color=COLOR_PALETTE[0]))
         fig_ps.update_yaxes(categoryorder='array', categoryarray=top_acts[::-1])
-        st.plotly_chart(fig_ps, use_container_width=True, key="chart_performance_spectrum")
+        st.plotly_chart(fig_ps, width="stretch", key="chart_performance_spectrum")
     else:
         st.warning("Raw data not found.")
 

@@ -11,8 +11,18 @@ from tabs import (
     tab5_conformance,
     tab6_generative,
 )
+from theme import apply_theme
+
+import os
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
 st.set_page_config(page_title="Road Traffic Fines", page_icon="🚦", layout="wide")
+apply_theme()
+
+_logo_path = os.path.join(_APP_DIR, "assets", "universityLeipzig.svg")
+with open(_logo_path, "r") as f:
+    _logo_svg = f.read()
+st.markdown(f'<div style="margin-bottom:1rem; max-width:250px;"><img src="data:image/svg+xml;base64,{__import__("base64").b64encode(_logo_svg.encode()).decode()}" style="width:100%;"></div>', unsafe_allow_html=True)
 
 
 @st.cache_resource
@@ -20,7 +30,7 @@ def load_models():
     """Load XGBoost outcome classifiers for all k/variant combinations."""
     models = {}
     for variant in ["cf", "da"]:
-        for k in [2, 3, 5, 8]:
+        for k in [2, 3, 5]:
             path = f"outputs/models/xgb_outcome_{variant}_k{k}.pkl"
             try:
                 models[(variant, k)] = joblib.load(path)
@@ -92,11 +102,8 @@ completed_cases = load_completed_cases()
 eval_results = load_eval_results()
 conformance_results = load_conformance_results()
 
-st.title("Predictive Process Analytics: Road Traffic Fines")
-st.markdown(
-    "This dashboard combines **Process Mining** with **Machine Learning** "
-    "to understand and predict the outcome of traffic fine cases."
-)
+st.title("Road Traffic Fine Management - Process Analytics")
+st.caption("Process discovery, conformance checking & predictive modeling on the RTFM event log.")
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "Data Exploration",

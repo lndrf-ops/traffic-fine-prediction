@@ -23,16 +23,34 @@ import pandas as pd
 # Outcome-revealing activities — must never appear in the prefix (leakage guardrail #1)
 OUTCOME_ACTIVITIES = {"Payment", "Send for Credit Collection"}
 
-# Prefix lengths to evaluate (Teinemaa 2019, §3.2; see docs/prefix_strategy.md)
-PREFIX_LENGTHS = [2, 3, 5, 8]
+# Prefix lengths to evaluate (Teinemaa 2019, §3.2)
+# Longer prefixes (k≥5) show saturating performance.
+PREFIX_LENGTHS = [2, 3, 5]
 
 # Leakage-safe payload columns for the Data-Aware variant.
-# Excluded: totalPaymentAmount, paymentAmount, expense (cumulative/future-leaking at case level)
-# See docs/leakage_guardrails.md §2.
+#
+# Dropped attributes and reasons:
+#   totalPaymentAmount — cumulative payment, only known at case end (future leakage)
+#   paymentAmount      — individual payment amount, leaks outcome (only exists if case = Payment)
+#   expense            — notification cost, accrues over time (future leakage)
+#   notificationType   — 99.8% = "P", near-constant; redundant with activity "Insert Fine Notification"
+#   dismissal          — 98.5% = "NIL", near-constant, negligible predictive value
+#   org:resource       — 73% missing, 148 unique IDs; outcome variation ±12pp is weak and
+#                        confounded with case attributes (amount, article) already in the model
+#   lifecycle:transition — single value ("complete"), zero information
+#   lastSent           — 86% missing, 3 unique values, redundant with activity sequence
+#   matricola          — 99.9% missing, single unique value
+#
 # Numeric: summed over prefix events. Categorical: most-frequent value (mode) in prefix.
 DA_PAYLOAD_COLS_NUMERIC = ["amount", "points"]
-DA_PAYLOAD_COLS_CATEGORICAL = ["vehicleClass", "article", "notificationType", "dismissal"]
+DA_PAYLOAD_COLS_CATEGORICAL = ["vehicleClass", "article"]
 DA_PAYLOAD_COLS = DA_PAYLOAD_COLS_NUMERIC + DA_PAYLOAD_COLS_CATEGORICAL
+
+# Top-10 articles cover 98.5% of cases; group the remaining 56 as "Other"
+# to reduce dimensionality (66 → 11 one-hot columns).
+# Distribution: Art. 157 (speeding, 45%), Art. 7 (red light, 29%),
+# Art. 158 (minor speeding, 18%) → top 3 alone = 92%.
+ARTICLE_TOP_N = [157.0, 7.0, 158.0, 142.0, 181.0, 180.0, 171.0, 80.0, 172.0, 146.0]
 
 
 def split_temporal(df_events: pd.DataFrame, train_ratio: float = 0.8, val_ratio: float = 0.2):
@@ -191,6 +209,11 @@ def build_prefixes(
             features = features.merge(agg.reset_index(), on="case:concept:name", how="left")
 
         # One-hot encode categorical DA columns
+        # Group rare articles into "Other" before encoding
+        if "article_mode" in features.columns:
+            features["article_mode"] = features["article_mode"].apply(
+                lambda x: x if x in ARTICLE_TOP_N else "Other"
+            )
         cat_cols = [c for c in features.columns if c.endswith("_mode")]
         features = pd.get_dummies(features, columns=cat_cols, dummy_na=False)
 

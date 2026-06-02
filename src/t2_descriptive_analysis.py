@@ -5,7 +5,7 @@
 - Saves: outputs/plots/dotted_chart.png, outputs/reports/descriptive_analysis.json
 
 Runs on df_events.pkl (raw, pre-cleaning) so all original columns are visible
-and drop decisions in t2 can be justified from this analysis.
+and drop decisions in t3 can be justified from this analysis.
 """
 
 import json

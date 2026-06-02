@@ -18,7 +18,24 @@ ACTIVITIES = [
     "Receive Result Appeal from Prefecture",
     "Notify Result Appeal to Offender",
     "Appeal to Judge",
+    "Payment",
 ]
+
+# Directly-follows relations observed in the real RTFM data.
+# Used to constrain the trace builder to realistic sequences.
+# "Send for Credit Collection" excluded — it's the outcome we predict.
+VALID_SUCCESSORS = {
+    "Create Fine": ["Send Fine", "Payment", "Insert Date Appeal to Prefecture", "Appeal to Judge"],
+    "Send Fine": ["Insert Fine Notification", "Payment", "Insert Date Appeal to Prefecture", "Send Appeal to Prefecture", "Appeal to Judge"],
+    "Insert Fine Notification": ["Add penalty", "Payment", "Insert Date Appeal to Prefecture", "Send Appeal to Prefecture", "Appeal to Judge", "Receive Result Appeal from Prefecture"],
+    "Add penalty": ["Payment", "Insert Date Appeal to Prefecture", "Send Appeal to Prefecture", "Appeal to Judge", "Notify Result Appeal to Offender", "Receive Result Appeal from Prefecture"],
+    "Insert Date Appeal to Prefecture": ["Send Fine", "Send Appeal to Prefecture", "Insert Fine Notification", "Add penalty", "Payment", "Receive Result Appeal from Prefecture", "Appeal to Judge"],
+    "Send Appeal to Prefecture": ["Receive Result Appeal from Prefecture", "Payment", "Insert Fine Notification", "Add penalty", "Insert Date Appeal to Prefecture", "Notify Result Appeal to Offender", "Send Fine", "Appeal to Judge"],
+    "Receive Result Appeal from Prefecture": ["Notify Result Appeal to Offender", "Payment", "Add penalty", "Appeal to Judge", "Insert Date Appeal to Prefecture", "Send Appeal to Prefecture"],
+    "Notify Result Appeal to Offender": ["Payment", "Add penalty", "Appeal to Judge", "Send Appeal to Prefecture", "Receive Result Appeal from Prefecture"],
+    "Appeal to Judge": ["Payment", "Send Fine", "Add penalty", "Insert Date Appeal to Prefecture", "Send Appeal to Prefecture", "Notify Result Appeal to Offender", "Receive Result Appeal from Prefecture"],
+    "Payment": ["Payment", "Add penalty", "Send Fine", "Insert Fine Notification", "Insert Date Appeal to Prefecture", "Send Appeal to Prefecture", "Notify Result Appeal to Offender", "Receive Result Appeal from Prefecture", "Appeal to Judge"],
+}
 
 # Available prefix lengths (must match trained models)
 AVAILABLE_K = [2, 3, 5, 8]
@@ -34,27 +51,65 @@ def render(models: dict):
     st.header("Live Case Prediction")
 
     st.markdown(
-        "Simulate a running case by selecting which activities have occurred so far. "
-        "The model predicts the probability that this case will end in **credit collection** "
-        "based on the activity pattern observed up to this point."
+        "Build a realistic case trace step by step. At each position, only activities "
+        "that actually follow the previous one in the real data are available. "
+        "The model predicts the probability of **credit collection** based on the observed pattern."
     )
     st.caption(
-        "The model uses binary features (activity observed: yes/no) from cases with similar "
-        "prefix lengths — it does NOT filter to cases with exactly these activities."
+        "Successor constraints are derived from directly-follows relations in the RTFM event log. "
+        "The model uses binary features (activity observed: yes/no), not the exact sequence order."
     )
 
     col_in, col_out = st.columns([1, 2])
 
     with col_in:
-        st.subheader("Case Configuration")
+        st.subheader("Build Case Trace")
 
-        st.markdown("**Activities observed so far:**")
-        prefix_events = st.multiselect(
-            "Select activities that have occurred in this case:",
-            options=ACTIVITIES,
-            default=["Create Fine", "Send Fine"],
-        )
+        # Sequential trace builder
+        if "trace" not in st.session_state:
+            st.session_state.trace = ["Create Fine"]
 
+        # Display current trace
+        trace = st.session_state.trace
+        st.markdown("**Current trace:**")
+        trace_str = " → ".join(f"`{a}`" for a in trace)
+        st.markdown(trace_str)
+
+        # Next activity selector (constrained to valid successors)
+        last_activity = trace[-1]
+        valid_next = VALID_SUCCESSORS.get(last_activity, [])
+
+        if valid_next and len(trace) < 8:
+            next_act = st.selectbox(
+                "Add next activity:",
+                options=valid_next,
+                key="next_activity_select",
+            )
+            col_add, col_reset = st.columns(2)
+            with col_add:
+                if st.button("➕ Add", width="stretch"):
+                    st.session_state.trace.append(next_act)
+                    st.rerun()
+            with col_reset:
+                if st.button("🔄 Reset", width="stretch"):
+                    st.session_state.trace = ["Create Fine"]
+                    st.rerun()
+        else:
+            if len(trace) >= 8:
+                st.info("Maximum prefix length reached (k=8).")
+            else:
+                st.warning(f"No valid successors for '{last_activity}' (excluding end events).")
+            if st.button("🔄 Reset trace", width="stretch"):
+                st.session_state.trace = ["Create Fine"]
+                st.rerun()
+
+        # Undo last
+        if len(trace) > 1:
+            if st.button("↩️ Undo last", width="stretch"):
+                st.session_state.trace.pop()
+                st.rerun()
+
+        prefix_events = trace
         n_events = len(prefix_events)
         selected_k = _best_k(n_events)
 
@@ -63,7 +118,11 @@ def render(models: dict):
                 f"Select at least **{min(AVAILABLE_K)}** activities to enable prediction."
             )
         else:
-            st.info(f"Using model trained on prefixes of length **k={selected_k}**")
+            if n_events != selected_k:
+                st.info(f"Trace has {n_events} events → using closest model (k={selected_k}). "
+                        f"Features are binary (activity seen: yes/no), so this is valid.")
+            else:
+                st.info(f"Using model trained on prefixes of length **k={selected_k}**")
 
         st.divider()
 
@@ -77,6 +136,10 @@ def render(models: dict):
         duration_days = 0
         amount = 35.0
         points = 0
+        vehicle_class = "A"
+        article = 157.0
+        notification_type = "P"
+        dismissal = "NIL"
         if variant_key == "da":
             st.markdown("**Additional attributes:**")
             duration_days = st.number_input(
@@ -91,7 +154,23 @@ def render(models: dict):
                 "Penalty points", min_value=0, max_value=10, value=0, step=1,
                 help="Range: 0–10",
             )
-        predict_clicked = st.button("Predict", type="primary", use_container_width=True)
+            vehicle_class = st.selectbox(
+                "Vehicle class",
+                options=["A", "C", "M", "R"],
+                index=0,
+                format_func=lambda x: {"A": "A – Autoveicoli (Cars)", "C": "C – Camion (Trucks)", "M": "M – Motoveicoli (Motorcycles)", "R": "R – Rimorchi (Trailers)"}[x],
+                help="A = cars (97%), C = trucks, M = motorcycles, R = trailers",
+            )
+            article = st.selectbox(
+                "Traffic article violated",
+                options=[157, 7, 158, 142, 181, 180, 171, 80, 172, 146],
+                index=0,
+                format_func=lambda x: f"Art. {x}" + {157: " (speeding)", 7: " (red light)", 158: " (speeding minor)"}.get(x, ""),
+                help="Top articles by frequency. Art. 157 = speeding (45% of cases)",
+            )
+            # notificationType and dismissal removed from feature engineering
+            # (near-constant, redundant with activity indicators)
+        predict_clicked = st.button("Predict", type="primary", width="stretch")
 
     with col_out:
         st.subheader("Result")
@@ -111,7 +190,9 @@ def render(models: dict):
 
         fcols_path = f"outputs/models/feature_cols_outcome_{variant_key}_k{selected_k}.json"
         try:
-            fcols = joblib.load(fcols_path)
+            import json as _json
+            with open(fcols_path) as _f:
+                fcols = _json.load(_f)
         except FileNotFoundError:
             st.error(f"Feature columns not found: {fcols_path}")
             return
@@ -128,6 +209,13 @@ def render(models: dict):
                 input_data["amount_sum_prefix"] = amount
             if "points_sum_prefix" in input_data:
                 input_data["points_sum_prefix"] = points
+            # One-hot encoded categoricals
+            vc_col = f"vehicleClass_mode_{vehicle_class}"
+            if vc_col in input_data:
+                input_data[vc_col] = 1
+            art_col = f"article_mode_{float(article)}"
+            if art_col in input_data:
+                input_data[art_col] = 1
 
         X = pd.DataFrame([input_data], columns=fcols).fillna(0)
         prob = model.predict_proba(X)[0][1]
@@ -143,7 +231,8 @@ def render(models: dict):
 - **Variant:** {'Control-Flow only (binary activity indicators)' if variant_key == 'cf' else 'Data-Aware (activities + temporal + payload)'}
 - **Prefix length (k):** {selected_k}
 - **Features:** {len(fcols)} columns
-- **Input activities:** {' → '.join(prefix_events)}
+- **Trace:** {' → '.join(prefix_events)}
+- **Unique activities in trace:** {len(set(prefix_events))}
             """)
 
         # Per-instance SHAP explanation
@@ -185,8 +274,8 @@ def render(models: dict):
                 linewidth=0.5,
             )
             ax.axvline(0, color="black", linewidth=0.8)
-            ax.set_xlabel("SHAP value (impact on collection probability)")
-            ax.set_title("Top 10 features for this prediction")
+            ax.set_xlabel("SHAP value (impact on log-odds of collection)")
+            ax.set_title("Top feature contributions for this prediction")
             plt.tight_layout()
             st.pyplot(fig)
             plt.close()
@@ -203,6 +292,6 @@ def render(models: dict):
         with st.expander("Global Feature Importance (all test cases)"):
             shap_path = f"outputs/plots/shap_{variant_key}_k{selected_k}.png"
             if os.path.exists(shap_path):
-                st.image(Image.open(shap_path), use_container_width=True)
+                st.image(Image.open(shap_path), width="stretch")
             else:
                 st.info("Run `python -m src.t6_interpretability` to generate.")

@@ -21,7 +21,6 @@ from src import (
     t6_evaluate,
     t6_interpretability,
     bonus_prescriptive,
-    bonus_generative_ai,
 )
 
 
@@ -36,7 +35,6 @@ TASKS = [
     (6.3, "Model Evaluation", t6_evaluate),
     (6.4, "Interpretability (SHAP)", t6_interpretability),
     (7, "Bonus: Prescriptive Analytics", bonus_prescriptive),
-    (8, "Bonus: Generative AI", bonus_generative_ai),
 ]
 
 

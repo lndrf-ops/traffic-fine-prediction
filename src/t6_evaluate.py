@@ -54,7 +54,7 @@ from sklearn.metrics import (
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, TensorDataset
 
-PREFIX_LENGTHS = [2, 3, 5, 8]
+PREFIX_LENGTHS = [2, 3, 5]  # longer prefixes (k≥5) show saturating performance
 VARIANTS = ["cf", "da"]
 CLASSICAL_OUTCOME = ["majority", "logreg", "rf", "xgb"]
 CLASSICAL_REMAINING = ["mean", "linreg", "rf_reg", "xgb_reg"]
@@ -483,9 +483,9 @@ def plot_remaining(results: list[dict], save_path: str):
 
 
 def plot_confusion_matrices(model_dir: str):
-    """Generate confusion matrices for XGBoost at k=8 (both variants)."""
+    """Generate confusion matrices for XGBoost at k=5 (both variants)."""
     for variant in VARIANTS:
-        k = 8
+        k = 5
         path = f"{model_dir}/xgb_outcome_{variant}_k{k}.pkl"
         if not os.path.exists(path):
             continue
@@ -540,8 +540,8 @@ def main():
     df = pd.DataFrame(all_results)
 
     print("\n  OUTCOME PREDICTION (AUC-ROC on test set)")
-    print(f"  {'Model':<12} {'Variant':<6} {'k=2':>7} {'k=3':>7} {'k=5':>7} {'k=8':>7}")
-    print(f"  {'─'*52}")
+    print(f"  {'Model':<12} {'Variant':<6} {'k=2':>7} {'k=3':>7} {'k=5':>7}")
+    print(f"  {'─'*42}")
     for model in CLASSICAL_OUTCOME + ["lstm"]:
         for variant in VARIANTS:
             sub = df[(df["task"] == "outcome") & (df["model"] == model) & (df["variant"] == variant)]
@@ -550,8 +550,8 @@ def main():
             print(f"  {model:<12} {variant.upper():<6} {aucs_str}")
 
     print("\n  REMAINING TIME (MAE days on test set)")
-    print(f"  {'Model':<12} {'Variant':<6} {'k=2':>7} {'k=3':>7} {'k=5':>7} {'k=8':>7}")
-    print(f"  {'─'*52}")
+    print(f"  {'Model':<12} {'Variant':<6} {'k=2':>7} {'k=3':>7} {'k=5':>7}")
+    print(f"  {'─'*42}")
     for model in CLASSICAL_REMAINING + ["lstm"]:
         for variant in VARIANTS:
             sub = df[(df["task"] == "remaining") & (df["model"] == model) & (df["variant"] == variant)]

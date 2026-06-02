@@ -16,7 +16,7 @@ def main():
     print("TASK 3: Data Cleaning")
     print("=" * 60)
 
-    # 1. Daten laden
+    # 1. Load data from Task 1
     df = pd.read_pickle("data/cleaned/df_events.pkl")
     print(f"  Loaded: {len(df):,} events, {df['case:concept:name'].nunique():,} cases")
 
