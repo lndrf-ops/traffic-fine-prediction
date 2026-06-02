@@ -33,6 +33,14 @@ def build_transition_matrix(sequences):
         for i in range(len(seq)):
             current_state = seq[i]
             next_state = seq[i + 1] if i + 1 < len(seq) else 'END'
+            
+            # --- FIX: Falls die Zustände fälschlicherweise als Listen reinkommen ---
+            if isinstance(current_state, list):
+                current_state = current_state[0] if len(current_state) > 0 else 'UNKNOWN'
+            if isinstance(next_state, list):
+                next_state = next_state[0] if len(next_state) > 0 else 'END'
+            # ----------------------------------------------------------------------
+
             if current_state not in transitions:
                 transitions[current_state] = []
             transitions[current_state].append(next_state)
@@ -145,9 +153,55 @@ def main():
     os.makedirs('outputs/plots', exist_ok=True)
     random.seed(42)
 
-    # 1. Load real sequences (grouped by case)
+    # 1. Load real sequences (grouped by case) — support two formats:
+    #    - case-level `completed_cases` with a `trace` column (list of activities)
+    #    - event-level DataFrame with one row per event and a `concept:name` column
     completed_cases = pd.read_pickle("data/cleaned/completed_cases.pkl")
-    real_sequences = completed_cases.groupby("case:concept:name")["concept:name"].apply(list).tolist()
+
+    def _flatten_group_values(values):
+        flat = []
+        for v in values:
+            if isinstance(v, list):
+                flat.extend(v)
+            else:
+                flat.append(v)
+        return flat
+
+    if 'trace' in completed_cases.columns:
+        # Case-level format produced by t3_data_cleaning.py
+        col = completed_cases['trace']
+        print("[diagnostic] completed_cases contains 'trace' column (case-level).")
+        print("[diagnostic] trace dtype:", col.dtype)
+        print("[diagnostic] sample traces (first 10):")
+        for i, v in enumerate(col.head(10).tolist(), 1):
+            print(f"  {i}: {repr(v)}")
+        # Ensure lists
+        real_sequences = col.apply(lambda x: x if isinstance(x, list) else [x]).tolist()
+    elif 'concept:name' in completed_cases.columns:
+        # Event-level format: perform diagnostics on `concept:name`
+        col = completed_cases["concept:name"]
+        print("[diagnostic] completed_cases contains event-level 'concept:name' column.")
+        print("[diagnostic] concept:name dtype:", col.dtype)
+        type_counts = col.apply(lambda x: type(x)).value_counts()
+        print("[diagnostic] types in concept:name:\n", type_counts.to_dict())
+        print("[diagnostic] sample values (first 10):")
+        for i, v in enumerate(col.head(10).tolist(), 1):
+            print(f"  {i}: {repr(v)}")
+        if col.apply(lambda x: isinstance(x, list)).any():
+            list_lens = col[col.apply(lambda x: isinstance(x, list))].apply(len)
+            print("[diagnostic] list-entry length stats (if any):\n", list_lens.describe().to_dict())
+
+        # Handle possible list entries inside `concept:name` or nested structures
+        if col.apply(lambda x: isinstance(x, list)).any():
+            case_counts = completed_cases.groupby("case:concept:name").size()
+            if (case_counts == 1).all():
+                real_sequences = completed_cases["concept:name"].apply(lambda x: x if isinstance(x, list) else [x]).tolist()
+            else:
+                real_sequences = completed_cases.groupby("case:concept:name")["concept:name"].apply(_flatten_group_values).tolist()
+        else:
+            real_sequences = completed_cases.groupby("case:concept:name")["concept:name"].apply(list).tolist()
+    else:
+        raise RuntimeError("Loaded completed_cases does not contain 'trace' nor 'concept:name' columns — cannot build sequences")
 
     # 2. Train first-order Markov Model
     print("  Training first-order Markov Chain model...")

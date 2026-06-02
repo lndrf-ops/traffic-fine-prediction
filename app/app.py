@@ -3,7 +3,14 @@ import joblib
 import json
 import pandas as pd
 
-from tabs import tab1_explorer, tab2_discovery, tab3_performance, tab4_predictive, tab5_conformance
+from tabs import (
+    tab1_explorer,
+    tab2_discovery,
+    tab3_performance,
+    tab4_predictive,
+    tab5_conformance,
+    tab6_generative,
+)
 
 st.set_page_config(page_title="Road Traffic Fines", page_icon="🚦", layout="wide")
 
@@ -26,6 +33,31 @@ def load_models():
 def load_data():
     try:
         return pd.read_pickle("data/cleaned/df_cleaned.pkl")
+    except FileNotFoundError:
+        return None
+
+
+@st.cache_data
+def load_generative_results():
+    try:
+        with open("outputs/reports/generative_quality_report.json") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return None
+
+
+@st.cache_data
+def load_synthetic_log():
+    try:
+        return pd.read_csv("outputs/reports/synthetic_event_log.csv")
+    except FileNotFoundError:
+        return None
+
+
+@st.cache_data
+def load_completed_cases():
+    try:
+        return pd.read_pickle("data/cleaned/completed_cases.pkl")
     except FileNotFoundError:
         return None
 
@@ -54,6 +86,9 @@ if not models:
     st.stop()
 
 df_raw = load_data()
+generative_results = load_generative_results()
+synthetic_log = load_synthetic_log()
+completed_cases = load_completed_cases()
 eval_results = load_eval_results()
 conformance_results = load_conformance_results()
 
@@ -63,12 +98,13 @@ st.markdown(
     "to understand and predict the outcome of traffic fine cases."
 )
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "Data Exploration",
     "Process Discovery",
     "Model Performance",
     "Live Prediction",
     "Conformance",
+    "Generative AI",
 ])
 
 with tab1:
@@ -85,3 +121,6 @@ with tab4:
 
 with tab5:
     tab5_conformance.render(conformance_results)
+
+with tab6:
+    tab6_generative.render(generative_results, synthetic_log, completed_cases)

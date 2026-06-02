@@ -41,7 +41,11 @@ def main():
 
     # 6. Case labeling (determine outcome)
     print("  Labeling cases (Payment=0, Credit Collection=1)...")
+    # Group activities per case into a trace list. Store under `trace` to avoid
+    # overwriting the original event column name `concept:name` in case downstream
+    # code expects atomic event rows or uses `concept:name` as event column.
     cases = df.groupby('case:concept:name')['concept:name'].apply(list).reset_index()
+    cases = cases.rename(columns={'concept:name': 'trace'})
 
     def determine_outcome(activity_list):
         # Credit Collection wins unconditionally — even if a payment occurred,
@@ -55,7 +59,7 @@ def main():
         else:
             return -1
 
-    cases['label'] = cases['concept:name'].apply(determine_outcome)
+    cases['label'] = cases['trace'].apply(determine_outcome)
     completed_cases = cases[cases['label'] != -1].copy()
 
     # 6b. Extract case-level attributes (from first event of each case)
@@ -80,6 +84,7 @@ def main():
     # 8. Speichern
     os.makedirs('data/cleaned', exist_ok=True)
     df.to_pickle("data/cleaned/df_cleaned.pkl")
+    # Save completed_cases which now contains: case:concept:name, trace (list), label, + case-level attrs
     completed_cases.to_pickle("data/cleaned/completed_cases.pkl")
 
     print(f"  ✅ Cleaned data saved: data/cleaned/df_cleaned.pkl")
