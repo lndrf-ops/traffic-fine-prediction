@@ -87,7 +87,7 @@ def render(generative_results, synthetic_log, completed_cases):
             labels={"value": "Share (%)", "activity": "Activity"},
             height=450,
         )
-        st.plotly_chart(fig_activity, use_container_width=True)
+        st.plotly_chart(fig_activity, width="stretch")
 
     # Trace length comparison
     real_lengths = _trace_lengths_from_completed(completed_cases)
@@ -110,7 +110,7 @@ def render(generative_results, synthetic_log, completed_cases):
             labels={"trace_length": "Trace Length", "source": "Source"},
             histnorm="probability",
         )
-        st.plotly_chart(fig_len, use_container_width=True)
+        st.plotly_chart(fig_len, width="stretch")
     else:
         st.info("Trace length comparison is not available because real or synthetic trace data is missing.")
 
