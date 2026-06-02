@@ -9,8 +9,8 @@ import streamlit as st
 def render(conformance_results: dict | None):
     st.header("Conformance Checking")
     st.caption(
-        "Compliance rules verified against the full event log following "
-        "van der Aalst (2016) and Mannhardt et al. (2016)."
+        "Domain-specific compliance rules derived from the Italian Codice della Strada (CdS). "
+        "Token-Based Replay following van der Aalst (2016), Ch. 8."
     )
 
     if not conformance_results:

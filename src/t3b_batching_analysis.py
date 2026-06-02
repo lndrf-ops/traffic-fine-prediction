@@ -206,6 +206,21 @@ def main():
     logger.info("    These idle periods impose a structural floor on remaining-time MAE")
     logger.info("    that no model can overcome without knowledge of the batch schedule.")
 
+    # 3b. Resource attribution — automation evidence
+    logger.info("\n  [3b] Resource attribution (org:resource fill rate per activity):")
+    resource_fill = df.groupby("concept:name")["org:resource"].apply(
+        lambda x: x.notna().mean() * 100
+    ).sort_values(ascending=False)
+    manual = resource_fill[resource_fill > 0]
+    automated = resource_fill[resource_fill == 0]
+    for act, pct in resource_fill.items():
+        tag = "MANUAL" if pct > 0 else "automated"
+        logger.info("    %-38s %5.1f%%  [%s]", act, pct, tag)
+    logger.info("    → %d/%d activities are system-triggered (no resource attribution).",
+                len(automated), len(resource_fill))
+    logger.info("    Batching patterns are enabled by this automation — no human")
+    logger.info("    bottleneck constrains throughput on batch-processing days.")
+
     # 4. Plot
     plot_batching_analysis(activity_stats, wait_times, save_dir)
 

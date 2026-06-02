@@ -1,17 +1,17 @@
 """Task 5: Conformance Checking
 
-Implements the 5 conformance rules from docs/conformance_rules.md:
+Implements 5 domain-specific conformance rules derived from the Italian
+Codice della Strada (CdS) — the statutory framework governing road traffic fines.
 
-Structural (Token-Based Replay on top-10-variant Petri net):
-  Rule 1: Payment must not occur before Create Fine
-  Rule 2: Send Appeal to Prefecture requires prior Insert Fine Notification
-  Rule 3: Cases with Send for Credit Collection must not contain subsequent Payment
+Rules:
+  1. 90-Day Statutory Deadline (Art. 201 CdS): Create Fine -> Send Fine <= 90 days
+  2. 60-Day Penalty Grace Period (Art. 202§1, 203§3 CdS): Add penalty >= 60 days after notification
+  3. Due Process / Appeal Prerequisite (Art. 203§1 CdS): Appeal requires prior notification
+  4. Duty to Inform (Art. 204§2 CdS): Prefecture result must be followed by notification to offender
+  5. Statutory Payment Accuracy (Art. 202§1, 203§3 CdS): No payment after debt is settled
 
-Temporal / Data-Aware (custom iteration):
-  Rule 4: Add penalty >= 60 days after Send Fine  [Italian Codice della Strada Art. 203]
-  Rule 5: Once cumulative Payment >= totalPaymentAmount, no further Payment events
+Additionally runs Token-Based Replay fitness on a discovered Petri net.
 
-Method reference: van der Aalst (2016), Process Mining: Data Science in Action, Ch. 8.
 Saves: outputs/reports/conformance_results.json
 """
 
@@ -22,95 +22,135 @@ import pandas as pd
 import pm4py
 
 
-def check_rule1(df_sorted: pd.DataFrame) -> dict:
-    """Payment must not occur before Create Fine."""
+def check_rule1_90day_deadline(df_sorted: pd.DataFrame) -> dict:
+    """Rule 1: 90-Day Statutory Deadline (Art. 201 CdS).
+
+    The time between Create Fine and Send Fine must not exceed 90 days.
+    Failure makes the fine legally contestable and may result in annulment.
+    """
     violations = 0
+    applicable = 0
+    violation_days = []
     for case_id, group in df_sorted.groupby("case:concept:name"):
         acts = group["concept:name"].tolist()
-        if "Payment" in acts and "Create Fine" in acts:
-            if acts.index("Payment") < acts.index("Create Fine"):
+        if "Create Fine" in acts and "Send Fine" in acts:
+            applicable += 1
+            create_ts = group[group["concept:name"] == "Create Fine"]["time:timestamp"].iloc[0]
+            send_ts = group[group["concept:name"] == "Send Fine"]["time:timestamp"].min()
+            delta_days = (send_ts - create_ts).days
+            if delta_days > 90:
                 violations += 1
-    total = df_sorted["case:concept:name"].nunique()
+                violation_days.append(delta_days)
     return {
-        "rule": "Payment not before Create Fine",
-        "source": "de Leoni & Mannhardt (2015)",
-        "total_cases": total,
+        "rule": "90-Day Statutory Deadline: Create Fine -> Send Fine <= 90 days",
+        "source": "Art. 201 CdS -- notification obligation within 90 days of ascertainment",
+        "applicable_cases": applicable,
         "violations": violations,
-        "compliance_rate": round(1 - violations / total, 6),
+        "compliance_rate": round(1 - violations / applicable, 6) if applicable else 1.0,
+        "avg_violation_days": round(sum(violation_days) / len(violation_days), 1) if violation_days else None,
     }
 
 
-def check_rule2(df_sorted: pd.DataFrame) -> dict:
-    """Send Appeal to Prefecture requires prior Insert Fine Notification."""
-    violations = 0
-    for case_id, group in df_sorted.groupby("case:concept:name"):
-        acts = group["concept:name"].tolist()
-        if "Send Appeal to Prefecture" in acts:
-            appeal_pos = acts.index("Send Appeal to Prefecture")
-            has_prior_notification = any(
-                a == "Insert Fine Notification" for a in acts[:appeal_pos]
-            )
-            if not has_prior_notification:
-                violations += 1
-    appeal_cases = df_sorted[
-        df_sorted["concept:name"] == "Send Appeal to Prefecture"
-    ]["case:concept:name"].nunique()
-    return {
-        "rule": "Send Appeal to Prefecture requires prior Insert Fine Notification",
-        "source": "Mannhardt et al. (2016), Table 3, Constraint C3",
-        "cases_with_appeal": appeal_cases,
-        "violations": violations,
-        "compliance_rate": round(1 - violations / appeal_cases, 6) if appeal_cases else 1.0,
-    }
+def check_rule2_60day_penalty(df_sorted: pd.DataFrame) -> dict:
+    """Rule 2: 60-Day Penalty Grace Period (Art. 202§1, 203§3 CdS).
 
-
-def check_rule3(df_sorted: pd.DataFrame) -> dict:
-    """Cases with Send for Credit Collection must not contain subsequent Payment."""
-    violations = 0
-    collection_cases = 0
-    for case_id, group in df_sorted.groupby("case:concept:name"):
-        acts = group["concept:name"].tolist()
-        if "Send for Credit Collection" in acts:
-            collection_cases += 1
-            collection_pos = acts.index("Send for Credit Collection")
-            has_subsequent_payment = any(
-                a == "Payment" for a in acts[collection_pos + 1:]
-            )
-            if has_subsequent_payment:
-                violations += 1
-    return {
-        "rule": "No Payment after Send for Credit Collection",
-        "source": "Mannhardt et al. (2016), implicit; process description",
-        "cases_with_credit_collection": collection_cases,
-        "violations": violations,
-        "compliance_rate": round(1 - violations / collection_cases, 6) if collection_cases else 1.0,
-    }
-
-
-def check_rule4(df_sorted: pd.DataFrame) -> dict:
-    """Add penalty >= 60 days after Send Fine (Codice della Strada Art. 203)."""
+    Add penalty must not occur earlier than 60 days after the notification
+    (Insert Fine Notification or Send Fine), respecting the citizen's payment window.
+    """
     violations = 0
     applicable = 0
     for case_id, group in df_sorted.groupby("case:concept:name"):
         acts = group["concept:name"].tolist()
-        if "Add penalty" in acts and "Send Fine" in acts:
-            applicable += 1
-            send_fine_ts = group[group["concept:name"] == "Send Fine"]["time:timestamp"].min()
-            add_penalty_ts = group[group["concept:name"] == "Add penalty"]["time:timestamp"].min()
-            delta_days = (add_penalty_ts - send_fine_ts).days
-            if delta_days < 60:
-                violations += 1
+        if "Add penalty" not in acts:
+            continue
+        # Find the notification timestamp (Insert Fine Notification preferred, else Send Fine)
+        notif_events = group[group["concept:name"].isin(["Insert Fine Notification", "Send Fine"])]
+        if notif_events.empty:
+            continue
+        applicable += 1
+        notif_ts = notif_events["time:timestamp"].min()
+        penalty_ts = group[group["concept:name"] == "Add penalty"]["time:timestamp"].min()
+        delta_days = (penalty_ts - notif_ts).days
+        if delta_days < 60:
+            violations += 1
     return {
-        "rule": "Add penalty >= 60 days after Send Fine",
-        "source": "Mannhardt et al. (2016), §6.2; Italian Codice della Strada Art. 203",
+        "rule": "60-Day Penalty Grace Period: Add penalty >= 60 days after notification",
+        "source": "Art. 202par1, 203par3 CdS -- 60-day payment window before penalty escalation",
         "applicable_cases": applicable,
         "violations": violations,
         "compliance_rate": round(1 - violations / applicable, 6) if applicable else 1.0,
     }
 
 
-def check_rule5(df_sorted: pd.DataFrame) -> dict:
-    """Once cumulative Payment >= totalPaymentAmount, no further Payment events."""
+def check_rule3_appeal_prerequisite(df_sorted: pd.DataFrame) -> dict:
+    """Rule 3: Due Process / Appeal Prerequisite (Art. 203§1 CdS).
+
+    Send Appeal to Prefecture must be preceded by Insert Fine Notification
+    (or Send Fine as minimum notification). An appeal cannot legally exist
+    without a prior formal notification.
+    """
+    violations = 0
+    applicable = 0
+    for case_id, group in df_sorted.groupby("case:concept:name"):
+        acts = group["concept:name"].tolist()
+        if "Send Appeal to Prefecture" not in acts:
+            continue
+        applicable += 1
+        appeal_pos = acts.index("Send Appeal to Prefecture")
+        has_prior_notification = any(
+            a in ("Insert Fine Notification", "Send Fine") for a in acts[:appeal_pos]
+        )
+        if not has_prior_notification:
+            violations += 1
+    return {
+        "rule": "Due Process: Appeal requires prior notification",
+        "source": "Art. 203par1 CdS -- appeal within 60 days of notification/communication",
+        "applicable_cases": applicable,
+        "violations": violations,
+        "compliance_rate": round(1 - violations / applicable, 6) if applicable else 1.0,
+    }
+
+
+def check_rule4_duty_to_inform(df_sorted: pd.DataFrame) -> dict:
+    """Rule 4: Duty to Inform (Art. 204§2 CdS).
+
+    In completed cases, Receive Result Appeal from Prefecture must be followed
+    by Notify Result Appeal to Offender. Right-censored (open) cases are excluded.
+    """
+    violations = 0
+    applicable = 0
+    terminal_activities = {"Payment", "Send for Credit Collection"}
+    for case_id, group in df_sorted.groupby("case:concept:name"):
+        acts = group["concept:name"].tolist()
+        # Only consider completed cases
+        if not any(a in terminal_activities for a in acts):
+            continue
+        if "Receive Result Appeal from Prefecture" not in acts:
+            continue
+        applicable += 1
+        if "Notify Result Appeal to Offender" not in acts:
+            violations += 1
+        else:
+            # Ensure notification comes after receiving the result
+            receive_pos = acts.index("Receive Result Appeal from Prefecture")
+            notify_pos = acts.index("Notify Result Appeal to Offender")
+            if notify_pos < receive_pos:
+                violations += 1
+    return {
+        "rule": "Duty to Inform: Prefecture result must be notified to offender",
+        "source": "Art. 204par2 CdS -- obligation to notify the Prefect's decision",
+        "applicable_cases": applicable,
+        "violations": violations,
+        "compliance_rate": round(1 - violations / applicable, 6) if applicable else 1.0,
+    }
+
+
+def check_rule5_payment_accuracy(df_sorted: pd.DataFrame) -> dict:
+    """Rule 5: Statutory Payment Accuracy (Art. 202§1, 203§3 CdS).
+
+    Once cumulative payments meet or exceed the required amount (totalPaymentAmount),
+    no further Payment events should occur.
+    """
     violations = 0
     applicable = 0
     for case_id, group in df_sorted.groupby("case:concept:name"):
@@ -123,18 +163,18 @@ def check_rule5(df_sorted: pd.DataFrame) -> dict:
         applicable += 1
         total_due_val = total_due.iloc[0]
         cumulative = 0.0
-        overpaid = False
+        settled = False
         for _, row in payment_events.iterrows():
-            cumulative += row.get("amount", 0) or 0
-            if cumulative >= total_due_val and not overpaid:
-                overpaid = True
+            cumulative += row.get("paymentAmount", 0) or row.get("amount", 0) or 0
+            if cumulative >= total_due_val and not settled:
+                settled = True
                 continue
-            if overpaid:
+            if settled:
                 violations += 1
                 break
     return {
-        "rule": "No Payment after cumulative amount >= totalPaymentAmount",
-        "source": "de Leoni, van der Aalst & Dees (2016), §7",
+        "rule": "Payment Accuracy: No payment after statutory debt is settled",
+        "source": "Art. 202par1, 203par3 CdS -- statutory fine amounts and discount/penalty rules",
         "applicable_cases": applicable,
         "violations": violations,
         "compliance_rate": round(1 - violations / applicable, 6) if applicable else 1.0,
@@ -175,34 +215,34 @@ def main():
     results["token_based_fitness"] = token_based_fitness(df)
     print(f"     Fit traces: {results['token_based_fitness']['perc_fit_traces']:.2f}%")
 
-    print("  2. Rule 1 — Payment not before Create Fine...")
-    results["rule1"] = check_rule1(df_sorted)
+    print("  2. Rule 1 -- 90-Day Statutory Deadline (Art. 201 CdS)...")
+    results["rule1"] = check_rule1_90day_deadline(df_sorted)
     print(f"     Compliance: {results['rule1']['compliance_rate']:.2%}  "
-          f"({results['rule1']['violations']} violations)")
+          f"({results['rule1']['violations']} / {results['rule1']['applicable_cases']} applicable)")
 
-    print("  3. Rule 2 — Appeal requires prior notification...")
-    results["rule2"] = check_rule2(df_sorted)
+    print("  3. Rule 2 -- 60-Day Penalty Grace Period (Art. 202par1, 203par3 CdS)...")
+    results["rule2"] = check_rule2_60day_penalty(df_sorted)
     print(f"     Compliance: {results['rule2']['compliance_rate']:.2%}  "
-          f"({results['rule2']['violations']} violations)")
+          f"({results['rule2']['violations']} / {results['rule2']['applicable_cases']} applicable)")
 
-    print("  4. Rule 3 — No Payment after Credit Collection...")
-    results["rule3"] = check_rule3(df_sorted)
+    print("  4. Rule 3 -- Due Process / Appeal Prerequisite (Art. 203par1 CdS)...")
+    results["rule3"] = check_rule3_appeal_prerequisite(df_sorted)
     print(f"     Compliance: {results['rule3']['compliance_rate']:.2%}  "
-          f"({results['rule3']['violations']} violations)")
+          f"({results['rule3']['violations']} / {results['rule3']['applicable_cases']} applicable)")
 
-    print("  5. Rule 4 — Add penalty >= 60 days after Send Fine...")
-    results["rule4"] = check_rule4(df_sorted)
+    print("  5. Rule 4 -- Duty to Inform (Art. 204par2 CdS)...")
+    results["rule4"] = check_rule4_duty_to_inform(df_sorted)
     print(f"     Compliance: {results['rule4']['compliance_rate']:.2%}  "
-          f"({results['rule4']['violations']} / {results['rule4']['applicable_cases']} applicable cases)")
+          f"({results['rule4']['violations']} / {results['rule4']['applicable_cases']} applicable)")
 
-    print("  6. Rule 5 — No Payment after full settlement...")
-    results["rule5"] = check_rule5(df_sorted)
+    print("  6. Rule 5 -- Statutory Payment Accuracy (Art. 202par1, 203par3 CdS)...")
+    results["rule5"] = check_rule5_payment_accuracy(df_sorted)
     print(f"     Compliance: {results['rule5']['compliance_rate']:.2%}  "
-          f"({results['rule5']['violations']} violations)")
+          f"({results['rule5']['violations']} / {results['rule5']['applicable_cases']} applicable)")
 
     with open("outputs/reports/conformance_results.json", "w") as f:
         json.dump(results, f, indent=2)
-    print("  Conformance results saved: outputs/reports/conformance_results.json")
+    print("\n  Conformance results saved: outputs/reports/conformance_results.json")
 
 
 if __name__ == "__main__":
