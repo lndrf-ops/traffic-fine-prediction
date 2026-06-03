@@ -28,6 +28,20 @@ def render(eval_results):
         "rf_reg": "Random Forest", "xgb_reg": "XGBoost",
     }
     variant_names = {"cf": "Control-Flow", "da": "Data-Aware"}
+    MODEL_ORDER = [
+        "Majority Baseline (Control-Flow)", "Majority Baseline (Data-Aware)",
+        "Logistic Regression (Control-Flow)", "Logistic Regression (Data-Aware)",
+        "Linear Regression (Control-Flow)", "Linear Regression (Data-Aware)",
+        "Random Forest (Control-Flow)", "Random Forest (Data-Aware)",
+        "XGBoost (Control-Flow)", "XGBoost (Data-Aware)",
+        "LSTM (Control-Flow)", "LSTM (Data-Aware)",
+        "Mean Baseline (Control-Flow)", "Mean Baseline (Data-Aware)",
+    ]
+
+    def _sort_by_order(df):
+        """Sort dataframe index by MODEL_ORDER."""
+        order = {name: i for i, name in enumerate(MODEL_ORDER)}
+        return df.iloc[sorted(range(len(df)), key=lambda i: order.get(df.index[i], 99))]
 
     def make_label(row):
         return f"{model_names.get(row['model'], row['model'])} ({variant_names.get(row['variant'], row['variant'])})"
@@ -60,10 +74,11 @@ def render(eval_results):
     )
 
     # Reference k selector
-    ref_k = st.select_slider(
-        "Reference prefix length",
+    ref_k = st.radio(
+        "Prefix length (k)",
         options=sorted(outcome["k"].unique()),
-        value=5,
+        index=len(sorted(outcome["k"].unique())) - 1,
+        horizontal=True,
         key="outcome_k",
     )
 
@@ -89,13 +104,29 @@ def render(eval_results):
         st.plotly_chart(fig_f1, width="stretch", key="chart_f1_overall")
 
         # Overall metrics table
-        overall_cols = ["label", "accuracy", "auc_roc"]
+        overall_cols = ["label", "f1_collection", "precision_collection", "recall_collection", "auc_roc", "accuracy"]
         available = [c for c in overall_cols if c in outcome_k.columns]
-        df_overall = outcome_k[available].copy().rename(columns={"label": "Model", "accuracy": "Accuracy", "auc_roc": "AUC-ROC"})
-        df_overall = df_overall.set_index("Model").sort_values("AUC-ROC", ascending=False)
+        df_overall = outcome_k[available].copy().rename(columns={
+            "label": "Model", "f1_collection": "F1 (Collection)",
+            "precision_collection": "Precision", "recall_collection": "Recall",
+            "auc_roc": "AUC-ROC", "accuracy": "Accuracy",
+        })
+        df_overall = _sort_by_order(df_overall.set_index("Model"))
         for col in df_overall.columns:
             df_overall[col] = df_overall[col].apply(lambda x: f"{x:.4f}" if isinstance(x, float) else x)
         st.dataframe(df_overall, width="stretch")
+
+        # Confusion matrices (best model: XGBoost, k=5)
+        with st.expander("Confusion Matrices (XGBoost, k=5)"):
+            cm_col1, cm_col2 = st.columns(2)
+            cm_cf = "outputs/plots/confusion_matrix_cf_k5.png"
+            cm_da = "outputs/plots/confusion_matrix_da_k5.png"
+            with cm_col1:
+                if os.path.exists(cm_cf):
+                    st.image(cm_cf, caption="Control-Flow", width=500)
+            with cm_col2:
+                if os.path.exists(cm_da):
+                    st.image(cm_da, caption="Data-Aware", width=500)
 
     with tab_collection:
         fig_coll = px.bar(
@@ -115,7 +146,7 @@ def render(eval_results):
         coll_cols = ["label", "f1_collection", "precision_collection", "recall_collection"]
         available = [c for c in coll_cols if c in outcome_k.columns]
         df_coll = outcome_k[available].copy().rename(columns={"label": "Model", "f1_collection": "F1", "precision_collection": "Precision", "recall_collection": "Recall"})
-        df_coll = df_coll.set_index("Model").sort_values("F1", ascending=False)
+        df_coll = _sort_by_order(df_coll.set_index("Model"))
         for col in df_coll.columns:
             df_coll[col] = df_coll[col].apply(lambda x: f"{x:.4f}" if isinstance(x, float) else x)
         st.dataframe(df_coll, width="stretch")
@@ -140,7 +171,7 @@ def render(eval_results):
             st.plotly_chart(fig_pay, width="stretch", key="chart_f1_pay")
 
             df_pay = outcome_k[available].copy().rename(columns={"label": "Model", "f1_payment": "F1", "precision_payment": "Precision", "recall_payment": "Recall"})
-            df_pay = df_pay.set_index("Model").sort_values("F1", ascending=False)
+            df_pay = _sort_by_order(df_pay.set_index("Model"))
             for col in df_pay.columns:
                 df_pay[col] = df_pay[col].apply(lambda x: f"{x:.4f}" if isinstance(x, float) else x)
             st.dataframe(df_pay, width="stretch")
@@ -152,15 +183,6 @@ def render(eval_results):
         "**F1** = harmonic mean of Precision and Recall. "
         "**AUC-ROC** = ranking ability across all thresholds."
     )
-
-    # Detailed: all k values
-    with st.expander("📋 Detailed: All prefix lengths"):
-        pivot = outcome.pivot_table(
-            index=["model", "variant"], columns="k", values="f1_collection"
-        ).round(4)
-        pivot.columns = [f"k={c}" for c in pivot.columns]
-        pivot.index = [f"{model_names.get(m, m)} ({variant_names.get(v, v)})" for m, v in pivot.index]
-        st.dataframe(pivot, width="stretch")
 
     # ─── Remaining Time Prediction ──────────────────────────────────────────
     st.markdown("---")
@@ -176,10 +198,11 @@ def render(eval_results):
         unsafe_allow_html=True,
     )
 
-    ref_k_r = st.select_slider(
-        "Reference prefix length",
+    ref_k_r = st.radio(
+        "Prefix length (k)",
         options=sorted(remaining["k"].unique()),
-        value=5,
+        index=len(sorted(remaining["k"].unique())) - 1,
+        horizontal=True,
         key="remaining_k",
     )
 
@@ -205,18 +228,10 @@ def render(eval_results):
         mae_cols.append("rmse_days")
     mae_df = remaining_k[mae_cols].copy()
     mae_df = mae_df.rename(columns={"label": "Model", "mae_days": "MAE (days)", "rmse_days": "RMSE (days)"})
-    mae_df = mae_df.set_index("Model").sort_values("MAE (days)")
+    mae_df = _sort_by_order(mae_df.set_index("Model"))
     for col in mae_df.columns:
         mae_df[col] = mae_df[col].apply(lambda x: f"{x:.1f}" if isinstance(x, float) else x)
     st.dataframe(mae_df, width="stretch")
-
-    with st.expander("📋 Detailed: All prefix lengths"):
-        pivot_r = remaining.pivot_table(
-            index=["model", "variant"], columns="k", values="mae_days"
-        ).round(1)
-        pivot_r.columns = [f"k={c}" for c in pivot_r.columns]
-        pivot_r.index = [f"{model_names.get(m, m)} ({variant_names.get(v, v)})" for m, v in pivot_r.index]
-        st.dataframe(pivot_r, width="stretch")
 
     # ─── Overfitting Assessment ─────────────────────────────────────────────
     st.markdown("---")
@@ -256,6 +271,33 @@ def render(eval_results):
                 st.info("No mild cases.")
     else:
         st.info("Overfitting assessment not found. Run the evaluation pipeline.")
+
+    # ─── Global Feature Importance (SHAP) ────────────────────────────────────
+    st.markdown("---")
+    st.subheader("Global Feature Importance (SHAP)")
+    st.caption("Which features matter most for predicting credit collection? XGBoost with TreeExplainer (exact Shapley values).")
+
+    shap_variant = st.radio("Variant", ["DA (Data-Aware)", "CF (Control-Flow)"], horizontal=True, key="shap_variant")
+    shap_var_key = "da" if shap_variant.startswith("DA") else "cf"
+
+    shap_cols = st.columns(3)
+    for col, k in zip(shap_cols, [2, 3, 5]):
+        shap_path = f"outputs/plots/shap_{shap_var_key}_k{k}.png"
+        with col:
+            if os.path.exists(shap_path):
+                st.image(shap_path, caption=f"k={k}")
+            else:
+                st.info(f"k={k} not found.")
+
+    st.markdown("**Remaining Time Prediction**")
+    shap_cols_rem = st.columns(3)
+    for col, k in zip(shap_cols_rem, [2, 3, 5]):
+        shap_path = f"outputs/plots/shap_remaining_{shap_var_key}_k{k}.png"
+        with col:
+            if os.path.exists(shap_path):
+                st.image(shap_path, caption=f"k={k}")
+            else:
+                st.info(f"k={k} not found. Run pipeline step 6.4.")
 
     # ─── Metric Explanation ─────────────────────────────────────────────────
     st.markdown("---")

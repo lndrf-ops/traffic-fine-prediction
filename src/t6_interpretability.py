@@ -56,6 +56,34 @@ def shap_summary(variant: str, k: int, model_dir: str, plot_dir: str, n_sample: 
     print(f"     Saved: {out_path}")
 
 
+def shap_remaining(variant: str, k: int, model_dir: str, plot_dir: str, n_sample: int = 200):
+    """SHAP summary for XGBoost remaining-time regressor."""
+    model_path = f"{model_dir}/xgb_reg_remaining_{variant}_k{k}.pkl"
+    if not os.path.exists(model_path):
+        print(f"     Skipping remaining {variant} k={k} — model not found")
+        return
+
+    df = pd.read_parquet(f"data/features/prefix_k{k}_{variant}.parquet")
+    test = df[df["split"] == "test"].drop(columns=["split"])
+    fcols = [c for c in test.columns if c not in {"label", "remaining_days"}]
+    X_test = test[fcols]
+
+    model = joblib.load(model_path)
+    X_sample = X_test.sample(min(n_sample, len(X_test)), random_state=42)
+
+    explainer = shap.TreeExplainer(model)
+    sv = explainer.shap_values(X_sample)
+
+    plt.figure(figsize=(10, 6))
+    shap.summary_plot(sv, X_sample, plot_type="dot", show=False, max_display=15)
+    plt.title(f"SHAP Feature Importance — XGBoost Remaining Time ({variant.upper()}, k={k})", fontsize=12)
+    plt.tight_layout()
+    out_path = f"{plot_dir}/shap_remaining_{variant}_k{k}.png"
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"     Saved: {out_path}")
+
+
 def main():
     print("=" * 60)
     print("TASK 6.4: Interpretability (SHAP)")
@@ -69,6 +97,7 @@ def main():
         print(f"  [{variant.upper()}] Generating SHAP plots...")
         for k in PREFIX_LENGTHS:
             shap_summary(variant, k, model_dir, plot_dir)
+            shap_remaining(variant, k, model_dir, plot_dir)
 
     print("  Interpretability complete.")
 
