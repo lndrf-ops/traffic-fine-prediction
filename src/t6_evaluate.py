@@ -39,7 +39,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from sklearn.calibration import calibration_curve
+from collections import defaultdict
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -218,7 +218,7 @@ def _gap_verdict_outcome(gap: float) -> str:
     class distribution shift between time periods — not a bug.
     """
     if gap < 0:
-        return "ok (test > train, likely temporal drift)"
+        return "ok"
     if gap < 0.02:
         return "ok"
     if gap < 0.05:
@@ -301,7 +301,6 @@ def assess_overfitting(model_dir: str, vocab_size: int) -> list[dict]:
 
     # --- LSTM: evaluate on train and test sequences ---
     seqs_df = pd.read_parquet("data/features/sequences.parquet")
-    from collections import defaultdict
     lstm_metrics: dict = defaultdict(dict)
     for variant in VARIANTS:
         for task in ["outcome", "remaining"]:
