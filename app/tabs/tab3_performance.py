@@ -260,19 +260,6 @@ def render(eval_results):
         col3.metric("⚠️ Mild", n_mild)
         col4.metric("❌ Overfit", n_overfit)
 
-        if n_overfit == 0 and n_mild == 0:
-            st.success("All trained models generalize well — no overfitting detected.")
-        elif n_overfit == 0:
-            st.warning(f"{n_mild} model(s) show mild overfitting. No severe cases.")
-        else:
-            st.error(f"{n_overfit} model(s) show signs of severe overfitting.")
-
-        if n_shift > 0:
-            st.info(
-                f"🔄 {n_shift} model(s) show **distribution shift** (test outperforms train). "
-                "This is expected with temporal splits where the test period has different characteristics."
-            )
-
         # Helper to format rows
         def _format_overfit_df(rows, task):
             df = pd.DataFrame(rows)
@@ -309,6 +296,12 @@ def render(eval_results):
             remaining_rows = [r for r in trained_data if r["task"] == "remaining"]
             if remaining_rows:
                 st.dataframe(_format_overfit_df(remaining_rows, "remaining"), hide_index=True, use_container_width=True)
+
+        if n_shift > 0:
+            st.info(
+                f"🔄 {n_shift} model(s) show **distribution shift** (test outperforms train). "
+                "This is expected with temporal splits where the test period has different characteristics."
+            )
     else:
         st.info("Overfitting assessment not found. Run the evaluation pipeline.")
 

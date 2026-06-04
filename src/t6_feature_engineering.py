@@ -229,7 +229,6 @@ def build_prefixes(
     remaining = (end_ts.values - last_ts) / np.timedelta64(1, "D")
     features["remaining_days"] = remaining
 
-    features = features.drop(columns=["case:concept:name"])
     return features
 
 
@@ -289,24 +288,9 @@ def main():
         for variant in ["cf", "da"]:
             features = build_prefixes(df, completed_cases, k, variant, case_end_times)
 
-            # Attach split column
-            # Re-merge case IDs from df to attach split — we need to recover them
-            # Build features with case ID retained temporarily
-            valid_ids = set(completed_cases["case:concept:name"])
-            label_map = completed_cases.set_index("case:concept:name")["label"].to_dict()
-
-            df_tmp = df[df["case:concept:name"].isin(valid_ids)].copy()
-            df_tmp = df_tmp.sort_values(["case:concept:name", "time:timestamp"])
-            df_tmp["_pos"] = df_tmp.groupby("case:concept:name").cumcount() + 1
-            df_prefix_tmp = df_tmp[df_tmp["_pos"] <= k].copy()
-            df_prefix_tmp = df_prefix_tmp[
-                ~df_prefix_tmp["concept:name"].isin(OUTCOME_ACTIVITIES)
-            ].copy()
-            keep = df_prefix_tmp.groupby("case:concept:name").size()
-            keep = keep[keep >= 1].index
-            surviving_cases = list(keep)
-
-            features["split"] = [split_map.get(cid, "unknown") for cid in surviving_cases]
+            # Attach split column using case IDs retained from build_prefixes
+            features["split"] = features["case:concept:name"].map(split_map).fillna("unknown")
+            features = features.drop(columns=["case:concept:name"])
 
             out_path = f"data/features/prefix_k{k}_{variant}.parquet"
             features.to_parquet(out_path, index=False)

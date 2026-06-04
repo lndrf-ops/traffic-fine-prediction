@@ -69,6 +69,9 @@ def compute_expected_gain(prob: float, action: str) -> float:
     if action == "escalate":
         return prob * BENEFIT_PREVENTED_COLLECTION - COST_ESCALATION
     if action == "reminder":
+        # Partial effect: reminders are less effective than direct escalation.
+        # Assumption: ~50% conversion rate vs. full escalation, based on typical
+        # debt-collection literature (e.g., early-stage nudges vs. formal demands).
         return prob * BENEFIT_PREVENTED_COLLECTION * 0.5 - COST_REMINDER  # partial effect
     return 0.0
 

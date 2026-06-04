@@ -158,6 +158,36 @@ def main():
     with open(f"{save_dir}/petri_net.dot", "w", encoding="utf-8") as f:
         f.write(dot_string)
 
+    # --- F) STRUCTURED REPORT ---
+    print("  6. Saving structured report...")
+    report = {
+        "bottlenecks_mean_top5": [
+            {"transition": t, "mean_days": round(float(transition_stats.loc[t, "mean"]), 2), "count": int(transition_stats.loc[t, "count"])}
+            for t in top_5_mean.index if t in transition_stats.index
+        ],
+        "bottlenecks_median_top5": [
+            {"transition": t, "median_days": round(float(transition_stats.loc[t, "median"]), 2), "count": int(transition_stats.loc[t, "count"])}
+            for t in top_5_median.index if t in transition_stats.index
+        ],
+        "case_durations": {
+            "mean_days": round(float(case_durations["total_days"].mean()), 2),
+            "median_days": round(float(case_durations["total_days"].median()), 2),
+            "std_days": round(float(case_durations["total_days"].std()), 2),
+            "min_days": round(float(case_durations["total_days"].min()), 2),
+            "max_days": round(float(case_durations["total_days"].max()), 2),
+        },
+        "top_variants": [
+            {"variant": v, "count": int(c)}
+            for v, c in top_variants.items()
+        ],
+    }
+
+    import json
+    os.makedirs("outputs/reports", exist_ok=True)
+    with open("outputs/reports/process_discovery.json", "w") as f:
+        json.dump(report, f, indent=2)
+    print("     ✅ Report saved: outputs/reports/process_discovery.json")
+
     # Note: Organizational perspective (resource analysis) is covered in t3b_batching_analysis.
 
     print("  ✅ Process Discovery complete")

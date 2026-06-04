@@ -67,6 +67,10 @@ def train_outcome_classical(train: pd.DataFrame, val: pd.DataFrame, k: int, vari
     # Hyperparameters: defaults chosen following scikit-learn/XGBoost recommendations.
     # No grid search performed — with 4 activities (CF) the models saturate quickly;
     # tuning would yield marginal improvement at high computational cost.
+    # NOTE: CF features at low k produce only 2–4 varying binary columns. All models
+    # converge to the same case ranking (identical AUC-ROC) because the feature space
+    # is too coarse to differentiate model families. This is expected and validates
+    # the CF vs DA comparison: CF alone is insufficient for model differentiation.
     models = {
         "majority": DummyClassifier(strategy="most_frequent", random_state=SEED),
         "logreg": LogisticRegression(
@@ -160,6 +164,11 @@ def _load_lstm_data(variant: str, task: str, prefix_lengths: list):
     return X, y, splits
 
 def train_lstm(variant: str, task: str, vocab_size: int, save_dir: str):
+    # One LSTM per (task, variant), pooled across all prefix lengths k ∈ {2,3,5}.
+    # Rationale: sequences are very short (max 5 tokens from 9 activities) — training
+    # separate models per k would fragment an already small feature space and reduce
+    # training data per model. Pooling lets the LSTM learn general sequential patterns
+    # while evaluation still reports per-k metrics for fair comparison with classical models.
     X, y, splits = _load_lstm_data(variant, task, PREFIX_LENGTHS)
 
     X_train = X[splits == "train"]
