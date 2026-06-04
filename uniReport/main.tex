@@ -1,0 +1,122 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel} % English ist korrekt für eure Anforderungen
+\usepackage{graphicx}
+\graphicspath{{../assets/}{assets/}{images/}}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{setspace}
+\usepackage{geometry}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\setlength{\headheight}{19pt}
+\usepackage{csquotes}
+\usepackage[nottoc]{tocbibind}
+\usepackage{xcolor}
+
+% Bibliography Settings
+\usepackage[style=authoryear, backend=biber, maxcitenames=2, maxbibnames=99, uniquelist=false]{biblatex}
+\addbibresource{./references.bib}
+
+% Layout Settings
+\geometry{a4paper, margin=2.5cm}
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+\onehalfspacing
+
+% Header and Footer Settings
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\thepage}
+% Falls du das Logo noch nicht hast, kannst du diese Zeile auskommentieren, bis das Bild im Ordner liegt
+\lhead{\includegraphics[height=0.5cm]{schriftzugUniLeipzig.png}}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Title Formatting
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+
+% --- TITLE PAGE ---
+\title{
+  \vspace{-2cm}
+  \includegraphics[width=0.7\textwidth]{universitaetLeipzigLogo.png} \\[2cm]
+  {\Large Process Analytics - Project Report Group 1}\\[1.0em]
+  {\huge \textbf{Road Traffic Fine Management Process}}\\[3.0em]
+}
+
+\author{
+\textit{Submitted by:}\\
+  Lennard Ruf, Ali Hawash, Krzysztof Olesiak and Markus Schneele \\[0.5em]
+  \textit{Supervising Professor:} Jun.-Prof. Dr. Jana-Rebecca Rehse \\[0.5em]
+  \textit{Submission Date:} June 14, 2026 \\[1.5em]
+  Faculty of Economics and Management Science \\
+  Business Information Systems Institute  \\
+  \small Grimmaische Straße 12, 04109 Leipzig \\
+  \small Phone: +49 341 97 - 33720 \\
+  \small Fax: +49 341 97 - 33729
+}
+\date{}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+\clearpage
+
+\pagenumbering{Roman}
+\tableofcontents
+\clearpage
+
+\pagenumbering{arabic}
+
+% ==========================================
+% CONTENT SECTIONS
+% ==========================================
+
+\section{Introduction}
+\label{sec:introduction}
+\input{sections/01_introduction.tex}
+
+\section{Data Foundation and Preparation}
+\label{sec:data_prep}
+\input{sections/02_data_prep.tex}
+
+\section{Exploratory Data Analysis}
+\label{sec:eda}
+\input{sections/03_eda.tex}
+
+\section{Process Discovery and Conformance Checking}
+\label{sec:discovery}
+\input{sections/04_discovery.tex}
+
+\section{Predictive Process Monitoring}
+\label{sec:predictive}
+\input{sections/05_predictive.tex}
+
+\section{Interpretability and Prescriptive Analytics}
+\label{sec:interpretability}
+\input{sections/06_interpretability.tex}
+
+\section{Generative AI for Synthetic Event Logs}
+\label{sec:generative}
+\input{sections/07_generative.tex}
+
+\section{Prototypical Deployment}
+\label{sec:deployment}
+\input{sections/08_deployment.tex}
+
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+\input{sections/09_conclusion.tex}
+
+% ==========================================
+% BIBLIOGRAPHY
+% ==========================================
+\clearpage
+\printbibliography
+
+\end{document}

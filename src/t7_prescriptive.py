@@ -16,7 +16,7 @@ risk with and without a proposed action.
 
 This module:
   1. Loads the best classical model (XGBoost, DA variant, k=5 — highest AUC).
-  2. Samples 200 test cases and computes predicted risk.
+  2. Computes predicted risk for the full test set.
   3. Assigns each case to a policy tier and estimates intervention cost-benefit.
   4. Saves: outputs/reports/prescriptive_recommendations.csv
            outputs/plots/prescriptive_risk_tiers.png
@@ -102,11 +102,10 @@ def main():
     model = joblib.load(model_path)
     X_test, y_test, fcols = load_test_data(variant="da", k=5)
 
-    # Sample 200 cases for illustration (full test set works equally well)
-    rng = np.random.default_rng(42)
-    idx = rng.choice(len(X_test), size=min(200, len(X_test)), replace=False)
-    X_sample = X_test[idx]
-    y_sample = y_test[idx]
+    # Use the full test set for statistically robust prescriptive evaluation
+    X_sample = X_test
+    y_sample = y_test
+    idx = np.arange(len(X_test))
 
     proba = model.predict_proba(X_sample)[:, 1]
 

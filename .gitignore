@@ -7,11 +7,10 @@ data/features/
 outputs/
 
 .DS_Store
+.vscode/
 
 __pycache__/
 *.pyc
 
 CLAUDE.md
 PLAN.md
-
-uniReport/

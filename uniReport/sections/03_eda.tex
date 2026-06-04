@@ -1,0 +1,67 @@
+% Present basic statistics (refer to the Data Explorer Tab from Streamlit).
+
+This section examines the structure of the event log through activity frequencies, fine amount distributions, case lengths, throughput times, and temporal workload patterns. The goal is to develop an empirical understanding of the process before applying formal discovery and predictive models.
+
+\subsection{Activity Frequencies}
+
+The 11 activities in the event log differ substantially in frequency. Table~\ref{tab:activity_freq} shows the complete distribution.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lr}
+\hline
+\textbf{Activity} & \textbf{Count} \\
+\hline
+Create Fine & 150,370 \\
+Send Fine & 103,987 \\
+Insert Fine Notification & 79,860 \\
+Add penalty & 79,860 \\
+Payment & 77,601 \\
+Send for Credit Collection & 59,013 \\
+Insert Date Appeal to Prefecture & 4,188 \\
+Send Appeal to Prefecture & 4,141 \\
+Receive Result Appeal from Prefecture & 999 \\
+Notify Result Appeal to Offender & 896 \\
+Appeal to Judge & 555 \\
+\hline
+\end{tabular}
+\caption{Activity frequencies in the event log}
+\label{tab:activity_freq}
+\end{table}
+
+The process is dominated by the standard fine handling path: creating, sending, notifying, penalizing, and eventually collecting or receiving payment. Appeal-related activities account for fewer than 2\% of all events, indicating that only a small fraction of offenders formally contests a fine.
+
+\subsection{Fine Amount Distribution}
+
+The fine amounts are heavily right-skewed. The median fine is 38 euros, while the mean is 63.68 euros — a gap that reflects the influence of a small number of high-value fines. The 95th percentile lies at 149.50 euros, and the maximum recorded amount is 8,000 euros. The vast majority of fines fall below 200 euros, which is consistent with typical Italian traffic violations such as speeding and parking offences.
+
+When broken down by outcome class, a subtle but relevant difference emerges. Cases that eventually escalate to credit collection have a mean fine amount of 49.03 euros, compared to 40.05 euros for cases that end in payment. The medians are identical at 35 euros, but the 75th percentile and maximum are both higher for collection cases (max 4,351 vs.\ 1,842 euros). This suggests that higher fine amounts are associated with a moderately increased escalation risk — an observation that motivates including \texttt{amount} as a feature in the data-aware prediction variant.
+
+\subsection{Case Lengths and Throughput Times}
+
+Most traces are short. The mean case length is 3.73 events and the median is 5 events. This distribution reflects the fact that the most common process variant — \textit{Create Fine} → \textit{Send Fine} → \textit{Insert Fine Notification} → \textit{Add penalty} → \textit{Payment} or \textit{Send for Credit Collection} — consists of exactly four to five steps. Cases with only two events typically represent fines that were paid immediately after creation, without further administrative steps. The longest observed case contains 20 events.
+
+Throughput time — measured as the duration between the first and last event of a case — varies widely:
+
+\begin{itemize}
+    \item Median: 198 days
+    \item Mean: 342 days
+    \item 75th percentile: 605 days
+    \item Maximum: 4,372 days (approximately 12 years)
+\end{itemize}
+
+The large gap between median and mean indicates that a substantial tail of long-running cases pulls the average upward. These long-duration cases are often those that escalate through penalties and eventually reach credit collection, making throughput time a potentially informative feature for outcome prediction.
+
+\subsection{Workload and Temporal Patterns}
+
+The event log spans 2000 to 2013. Yearly event volumes fluctuate between approximately 22,000 and 56,000 events without a clear monotonic trend. The highest activity occurs in 2006 with 55,860 events, while 2012 and 2013 show notably lower volumes. This is not a true decline in process activity but an artifact of the data extraction: the last recorded event in the log dates to June 2013, meaning that cases started in 2012 or 2013 were still running when the export was created. Their subsequent activities had not yet occurred and are therefore absent from the log. This interpretation is supported by the average trace length, which drops from 3.7 events overall to 2.9 for cases started in 2012 and 2.1 for those started in 2013.
+
+\subsection{Key Observations for Downstream Analysis}
+
+The exploratory analysis yields three insights that inform subsequent modeling decisions:
+
+\begin{enumerate}
+    \item \textbf{Short traces dominate}: With 95\% of cases containing six or fewer events, prefix lengths of $k \in \{2, 3, 5\}$ capture the relevant process behavior for most cases.
+    \item \textbf{Throughput time correlates with complexity}: Long-running cases tend to accumulate more activities, suggesting that elapsed time features will carry predictive signal.
+    \item \textbf{Timestamps are date-only}: All timestamps have a time component of 00:00:00, meaning the source system recorded only dates. Intra-day analysis is not possible, and all temporal features operate at day granularity.
+\end{enumerate}
