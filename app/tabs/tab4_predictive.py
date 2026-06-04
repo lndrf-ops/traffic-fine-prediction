@@ -14,11 +14,6 @@ except ImportError:
     shap = None
 
 
-@st.cache_resource
-def _get_explainer(_model):
-    """Cache the SHAP TreeExplainer (expensive to create)."""
-    return shap.TreeExplainer(_model)
-
 ACTIVITIES = [
     "Create Fine",
     "Send Fine",
@@ -48,7 +43,22 @@ VALID_SUCCESSORS = {
     "Payment": ["Payment", "Add penalty", "Send Fine", "Insert Fine Notification", "Insert Date Appeal to Prefecture", "Send Appeal to Prefecture", "Notify Result Appeal to Offender", "Receive Result Appeal from Prefecture", "Appeal to Judge"],
 }
 
-# Available prefix lengths (must match trained models)
+# Activities that require "Send Fine" to have occurred earlier in the trace
+REQUIRES_SEND_FINE = {"Add penalty", "Insert Fine Notification", "Notify Result Appeal to Offender"}
+
+
+def _get_valid_successors(trace: list[str]) -> list[str]:
+    """Context-aware successors: filter based on what has occurred in the trace."""
+    last = trace[-1]
+    candidates = VALID_SUCCESSORS.get(last, [])
+    seen = set(trace)
+    # If Send Fine hasn't occurred, exclude activities that require it
+    if "Send Fine" not in seen:
+        candidates = [a for a in candidates if a not in REQUIRES_SEND_FINE]
+    return candidates
+
+
+# Always use model matching trace length (k=2 for 2 events, k=3 for 3-4, k=5 for 5+)
 AVAILABLE_K = [2, 3, 5]
 
 
@@ -68,7 +78,8 @@ def render(models: dict):
     )
     st.caption(
         "Successor constraints are derived from directly-follows relations in the RTFM event log. "
-        "The model uses binary features (activity observed: yes/no), not the exact sequence order."
+        "The model uses binary features (activity observed: yes/no), not the exact sequence order. "
+        "Note: *Payment* events can occur mid-process without resolving the case."
     )
 
     col_in, col_out = st.columns([1, 2])
@@ -122,64 +133,51 @@ def render(models: dict):
         st.divider()
         st.subheader("Build Case Trace")
 
-        # Sequential trace builder
-        if "trace" not in st.session_state:
-            st.session_state.trace = ["Create Fine"]
-
-        # Display current trace
-        trace = st.session_state.trace
-        st.markdown("**Current trace:**")
-        trace_str = " → ".join(f"`{a}`" for a in trace)
-        st.markdown(trace_str)
-
-        # Next activity selector (constrained to valid successors)
-        last_activity = trace[-1]
-        valid_next = VALID_SUCCESSORS.get(last_activity, [])
-
-        if valid_next and len(trace) < 8:
-            next_act = st.selectbox(
-                "Add next activity:",
-                options=valid_next,
-                key="next_activity_select",
-            )
-            col_add, col_reset = st.columns(2)
-            with col_add:
-                if st.button("➕ Add", width="stretch"):
-                    st.session_state.trace.append(next_act)
-                    st.rerun()
-            with col_reset:
-                if st.button("🔄 Reset", width="stretch"):
-                    st.session_state.trace = ["Create Fine"]
-                    st.rerun()
-        else:
-            if len(trace) >= 8:
-                st.info("Maximum prefix length reached (k=8).")
-            else:
-                st.warning(f"No valid successors for '{last_activity}' (excluding end events).")
-            if st.button("🔄 Reset trace", width="stretch"):
+        @st.fragment
+        def _trace_builder():
+            # Sequential trace builder
+            if "trace" not in st.session_state:
                 st.session_state.trace = ["Create Fine"]
-                st.rerun()
 
-        # Undo last
-        if len(trace) > 1:
-            if st.button("↩️ Undo last", width="stretch"):
-                st.session_state.trace.pop()
-                st.rerun()
+            # Display current trace
+            trace = st.session_state.trace
+            st.markdown("**Current trace:**", help="Model is selected based on trace length: 2 events → k=2, 3–4 → k=3, 5+ → k=5. Longer prefixes give more accurate predictions.")
+            trace_str = " → ".join(f"`{a}`" for a in trace)
+            st.markdown(trace_str)
 
-        prefix_events = trace
+            # Next activity selector (constrained to valid successors)
+            last_activity = trace[-1]
+            valid_next = _get_valid_successors(trace)
+
+            if valid_next and len(trace) < 8:
+                next_act = st.selectbox(
+                    "Add next activity:",
+                    options=valid_next,
+                    key="next_activity_select",
+                )
+                col_add, col_reset = st.columns(2)
+                with col_add:
+                    if st.button("➕ Add", width="stretch"):
+                        st.session_state.trace.append(next_act)
+                        st.rerun(scope="fragment")
+                with col_reset:
+                    if st.button("🔄 Reset", width="stretch"):
+                        st.session_state.trace = ["Create Fine"]
+                        st.rerun(scope="fragment")
+            else:
+                if len(trace) >= 8:
+                    st.info("Maximum prefix length reached (k=8).")
+                else:
+                    st.warning(f"No valid successors for '{last_activity}' (excluding end events).")
+                if st.button("🔄 Reset trace", width="stretch"):
+                    st.session_state.trace = ["Create Fine"]
+                    st.rerun(scope="fragment")
+
+        _trace_builder()
+
+        prefix_events = st.session_state.get("trace", ["Create Fine"])
         n_events = len(prefix_events)
         selected_k = _best_k(n_events)
-
-        if selected_k is None:
-            st.warning(
-                f"Select at least **{min(AVAILABLE_K)}** activities to enable prediction."
-            )
-        else:
-            if n_events != selected_k:
-                st.info(f"Trace has {n_events} events → using closest model (k={selected_k}). "
-                        f"Features are binary (activity seen: yes/no), so this is valid.")
-            else:
-                st.info(f"Using model trained on prefixes of length **k={selected_k}**")
 
         st.divider()
 
@@ -264,15 +262,14 @@ def render(models: dict):
         try:
             import matplotlib.pyplot as plt
 
-            explainer = _get_explainer(model)
-            shap_values = explainer.shap_values(X)
-
-            if isinstance(shap_values, list):
-                sv = shap_values[1][0]
-            elif shap_values.ndim == 3:
-                sv = shap_values[0, :, 1]
-            else:
-                sv = shap_values[0]
+            explainer = shap.TreeExplainer(model)
+            sv = explainer.shap_values(X.values)
+            if isinstance(sv, list):
+                sv = sv[1][0]  # class 1 (collection), first sample
+            elif sv.ndim == 3:
+                sv = sv[0, :, 1]
+            elif sv.ndim == 2:
+                sv = sv[0]
 
             abs_sv = np.abs(sv)
             nonzero = np.where(abs_sv > 1e-8)[0]

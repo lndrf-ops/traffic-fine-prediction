@@ -69,7 +69,7 @@ def render(eval_results):
     st.markdown("---")
     st.subheader("📊 Outcome Prediction (Classification)")
     st.caption(
-        "Task: Predict whether a case ends in **Payment** (0) or "
+        "Task: Predict whether a case ends in **No Collection** (0) or "
         "**Send for Credit Collection** (1). Temporal split 64/16/20."
     )
 
@@ -86,7 +86,7 @@ def render(eval_results):
     outcome_k["label"] = outcome_k.apply(make_label, axis=1)
 
     # Sub-tabs for per-class comparison
-    tab_overall, tab_collection, tab_payment = st.tabs(["Overall", "Collection (class 1)", "Payment (class 0)"])
+    tab_overall, tab_collection, tab_payment = st.tabs(["Overall", "Collection (class 1)", "No Collection (class 0)"])
 
     with tab_overall:
         fig_f1 = px.bar(
@@ -242,33 +242,73 @@ def render(eval_results):
         with open(overfit_path) as f:
             overfit_data = json.load(f)
 
-        verdicts = [r["verdict"] for r in overfit_data]
-        n_ok = verdicts.count("ok")
-        n_mild = verdicts.count("mild")
-        n_overfit = verdicts.count("overfit")
+        # Filter out baselines (they can't overfit by definition)
+        BASELINE_MODELS = {"majority", "mean"}
+        trained_data = [r for r in overfit_data if r["model"] not in BASELINE_MODELS]
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("✅ OK", n_ok)
-        col2.metric("⚠️ Mild", n_mild)
-        col3.metric("❌ Overfit", n_overfit)
+        # Summary metrics
+        verdicts = [r["verdict"] for r in trained_data]
+        n_healthy = sum(1 for v in verdicts if v == "healthy")
+        n_shift = sum(1 for v in verdicts if v == "distribution_shift")
+        n_mild = sum(1 for v in verdicts if v == "mild")
+        n_overfit = sum(1 for v in verdicts if v == "overfit")
 
-        if n_overfit == 0:
-            st.success("No severe overfitting detected across any model configuration.")
+        # Summary section
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("✅ Healthy", n_healthy)
+        col2.metric("🔄 Distribution Shift", n_shift)
+        col3.metric("⚠️ Mild", n_mild)
+        col4.metric("❌ Overfit", n_overfit)
+
+        if n_overfit == 0 and n_mild == 0:
+            st.success("All trained models generalize well — no overfitting detected.")
+        elif n_overfit == 0:
+            st.warning(f"{n_mild} model(s) show mild overfitting. No severe cases.")
         else:
-            st.error(f"{n_overfit} model(s) show signs of overfitting.")
+            st.error(f"{n_overfit} model(s) show signs of severe overfitting.")
 
-        with st.expander("Details: Mild overfitting cases"):
-            mild = [r for r in overfit_data if r["verdict"] == "mild"]
-            if mild:
-                df_mild = pd.DataFrame(mild)
-                if "model" in df_mild.columns and "variant" in df_mild.columns:
-                    df_mild["model"] = df_mild.apply(
-                        lambda r: f"{model_names.get(r['model'], r['model'])} ({variant_names.get(r['variant'], r['variant'])})", axis=1
-                    )
-                    df_mild = df_mild.drop(columns=["variant"], errors="ignore")
-                st.dataframe(df_mild, width="stretch")
+        if n_shift > 0:
+            st.info(
+                f"🔄 {n_shift} model(s) show **distribution shift** (test outperforms train). "
+                "This is expected with temporal splits where the test period has different characteristics."
+            )
+
+        # Helper to format rows
+        def _format_overfit_df(rows, task):
+            df = pd.DataFrame(rows)
+            df["Model"] = df.apply(
+                lambda r: f"{model_names.get(r['model'], r['model'])} ({variant_names.get(r['variant'], r['variant'])})", axis=1
+            )
+            order = {name: i for i, name in enumerate(MODEL_ORDER)}
+            df["_sort"] = df["Model"].map(lambda x: order.get(x, 99))
+            df = df.sort_values(["_sort", "k"]).drop(columns=["_sort", "model", "variant", "task"], errors="ignore")
+            if task == "outcome":
+                df = df.rename(columns={
+                    "k": "Prefix k", "train_auc_roc": "Train AUC-ROC",
+                    "test_auc_roc": "Test AUC-ROC", "gap": "Gap",
+                    "verdict": "Verdict",
+                })
             else:
-                st.info("No mild cases.")
+                df = df.rename(columns={
+                    "k": "Prefix k", "train_mae_days": "Train MAE (days)",
+                    "test_mae_days": "Test MAE (days)", "rel_gap": "Relative Gap",
+                    "verdict": "Verdict",
+                })
+            cols = [c for c in df.columns if c == "Model"] + [c for c in df.columns if c != "Model"]
+            return df[cols]
+
+        # Tabs for outcome vs remaining
+        tab_outcome, tab_remaining = st.tabs(["Outcome Prediction", "Remaining Time Prediction"])
+
+        with tab_outcome:
+            outcome_rows = [r for r in trained_data if r["task"] == "outcome"]
+            if outcome_rows:
+                st.dataframe(_format_overfit_df(outcome_rows, "outcome"), hide_index=True, use_container_width=True)
+
+        with tab_remaining:
+            remaining_rows = [r for r in trained_data if r["task"] == "remaining"]
+            if remaining_rows:
+                st.dataframe(_format_overfit_df(remaining_rows, "remaining"), hide_index=True, use_container_width=True)
     else:
         st.info("Overfitting assessment not found. Run the evaluation pipeline.")
 

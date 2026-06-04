@@ -217,10 +217,10 @@ def _gap_verdict_outcome(gap: float) -> str:
     Negative gap (test > train) can occur with temporal splits due to
     class distribution shift between time periods — not a bug.
     """
-    if gap < 0:
-        return "ok"
+    if gap < -0.02:
+        return "distribution_shift"
     if gap < 0.02:
-        return "ok"
+        return "healthy"
     if gap < 0.05:
         return "mild"
     return "overfit"
@@ -228,8 +228,10 @@ def _gap_verdict_outcome(gap: float) -> str:
 
 def _gap_verdict_remaining(rel_gap: float) -> str:
     """Classify relative MAE train/test gap (test_mae / train_mae - 1)."""
+    if rel_gap < -0.05:
+        return "distribution_shift"
     if rel_gap < 0.05:
-        return "ok"
+        return "healthy"
     if rel_gap < 0.15:
         return "mild"
     return "overfit"
@@ -472,7 +474,7 @@ def plot_confusion_matrices(model_dir: str):
 
         cm = confusion_matrix(y_test, y_pred)
         fig, ax = plt.subplots(figsize=(6, 5))
-        disp = ConfusionMatrixDisplay(cm, display_labels=["Payment", "Collection"])
+        disp = ConfusionMatrixDisplay(cm, display_labels=["No Collection", "Collection"])
         disp.plot(ax=ax, cmap="Blues", values_format=",d")
         ax.set_title(f"Confusion Matrix — XGBoost ({variant.upper()}, k={k})")
         plt.tight_layout()
