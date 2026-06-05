@@ -12,5 +12,19 @@ outputs/
 __pycache__/
 *.pyc
 
+# LaTeX build artifacts
+uniReport/out/
+uniReport/*.aux
+uniReport/*.bbl
+uniReport/*.bcf
+uniReport/*.blg
+uniReport/*.fdb_latexmk
+uniReport/*.fls
+uniReport/*.log
+uniReport/*.out
+uniReport/*.run.xml
+uniReport/*.toc
+uniReport/*.synctex.gz
+
 CLAUDE.md
 PLAN.md
