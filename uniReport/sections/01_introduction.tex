@@ -5,14 +5,11 @@
 \subsection{Motivation and Problem Statement}
 \label{sub:motivation}
 
-Public administrations and governmental bodies are under increasing
-pressure to operate efficiently, transparently, and cost-effectively
-while strictly adhering to regulatory and legal frameworks. However,
-traditional public sector processes often suffer from inherent
-inefficiencies, such as highly bureaucratic workflows, resource
-constraints, and rigid batch-processing habits. These systemic issues
-frequently lead to severe process bottlenecks, prolonged throughput
-times, and ultimately, a loss of public trust and financial revenue.
+Public administrations must balance operational efficiency with
+strict adherence to regulatory and legal frameworks. In practice,
+however, many administrative processes are characterized by
+bureaucratic workflows, limited resources, and batch-processing
+habits that cause delays and increased costs.
 
 A prominent example of such an administrative workflow is the
 processing and collection of road traffic fines. When traffic
@@ -23,22 +20,20 @@ Analyzing the well-known \textit{Road Traffic Fine Management}
 dataset---extracted from a real-world information system of an Italian
 local police force \parencite{deleoni2015}---is therefore highly
 relevant. It provides a large-scale, complex event log that closely
-reflects the operational reality of public administrations. By
-applying advanced process analytics to this dataset, this project
-demonstrates how organizations can transition from a reactive,
-intuition-based management approach to a proactive, data-driven
-optimization strategy.
+reflects the operational reality of public administrations. By applying process analytics to this dataset, this project
+illustrates how predictive models can identify at-risk cases
+before they escalate, supporting earlier and more targeted
+interventions.
 
 \subsection{Project Objectives and Research Questions}
 \label{sub:objectives}
 
-The primary objective of this project is to comprehensively analyze
-the Road Traffic Fine Management process by bridging the gap between
-descriptive Process Mining \parencite{vanderaalst2016} and predictive
-Machine Learning. Instead of solely discovering how the process was
-executed in the past, this report aims to predict future case outcomes
-and provide actionable recommendations to actively mitigate
-operational risks.
+The primary objective of this project is to analyze the Road
+Traffic Fine Management process by combining descriptive Process
+Mining \parencite{vanderaalst2016} with predictive Machine Learning.
+Beyond discovering how the process was executed in the past, this
+report aims to predict future case outcomes and derive concrete
+recommendations for reducing unnecessary escalations.
 
 To guide the analytical pipeline, this report addresses the following
 core research questions:
@@ -53,10 +48,10 @@ core research questions:
         predict the escalation of a fine to credit collection early in
         the process lifecycle by utilizing Machine Learning algorithms
         such as Random Forest and Long Short-Term Memory networks?
-    \item \textbf{RQ4 (Prescriptive Analytics):} How can predictive
-        insights and SHAP-based model explainability be leveraged to
-        generate prescriptive, rule-based recommendations that
-        minimize legal escalation costs?
+    \item \textbf{RQ4 (Prescriptive Analytics):} How can predicted
+        risk scores and SHAP-based feature attributions be used to
+        derive rule-based recommendations that reduce legal
+        escalation costs?
 \end{itemize}
 
 \subsection{Structure of the Report}
@@ -70,7 +65,7 @@ Section~\ref{sec:discovery} applies process discovery and conformance
 checking to construct and evaluate formal process models.
 Section~\ref{sec:predictive} presents the predictive process
 monitoring pipeline for both outcome classification and remaining time
-prediction. Section~\ref{sec:interpretability} leverages SHAP-based
+prediction. Section~\ref{sec:interpretability} uses SHAP-based
 explainability to derive prescriptive recommendations, while
 Section~\ref{sec:generative} describes synthetic event log generation.
 Section~\ref{sec:deployment} presents the prototypical Streamlit

@@ -2,7 +2,7 @@
 % SECTION 6: INTERPRETABILITY AND PRESCRIPTIVE ANALYTICS
 % ==========================================
 
-While the predictive models from the previous section achieve strong classification performance, understanding \textit{why} a model predicts a particular outcome is equally important — both for building trust in the system and for deriving actionable process improvements. This section applies SHAP-based feature importance analysis to the XGBoost outcome classifier and translates the resulting insights into a prescriptive recommendation system.
+While the predictive models from the previous section achieve strong classification performance, understanding \textit{why} a model predicts a particular outcome is equally important — both for validating that the model relies on plausible features and for informing process improvements. This section applies SHAP-based feature importance analysis to the XGBoost outcome classifier and translates the resulting insights into a prescriptive recommendation system.
 
 \subsection{Feature Importance via SHAP}
 \label{sub:shap}
@@ -42,7 +42,7 @@ This finding has a practical implication: for outcome prediction, a deployment c
 \subsection{Prescriptive Process Monitoring}
 \label{sub:prescriptive}
 
-Prescriptive analytics extends prediction into actionable recommendations. Rather than merely forecasting which cases will escalate, the system recommends specific interventions based on the predicted probability of credit collection.
+Prescriptive analytics moves beyond forecasting by recommending specific interventions. Rather than only predicting which cases will escalate, the system assigns each case to a risk tier with a corresponding recommended action based on the predicted probability of credit collection.
 
 \subsubsection{Policy Design}
 

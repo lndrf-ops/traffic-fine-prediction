@@ -5,7 +5,7 @@
 \subsection{Summary of Findings}
 \label{sub:summary}
 
-This project applied an end-to-end process analytics pipeline to the Road Traffic Fine Management event log, combining process discovery, conformance checking, predictive monitoring, and prescriptive recommendations. The research questions posed in the introduction can now be answered:
+This project applied a full process analytics pipeline to the Road Traffic Fine Management event log, combining process discovery, conformance checking, predictive monitoring, and prescriptive recommendations. The research questions posed in the introduction can now be answered:
 
 \textbf{RQ1 (Process Discovery):} The process is structurally simple — two variants account for over 68\% of all completed cases. The Petri net discovered from the top 10 variants achieves 98.7\% trace fitness on the full log. The primary bottleneck lies in the transition toward credit collection, with mean delays exceeding several hundred days.
 
@@ -13,7 +13,7 @@ This project applied an end-to-end process analytics pipeline to the Road Traffi
 
 \textbf{RQ3 (Predictive Monitoring):} Outcome prediction achieves an AUC-ROC of 0.889 using an LSTM at prefix length $k=5$, though even a simple Logistic Regression at $k=2$ reaches 0.879. The activity sequence alone (CF variant) captures nearly all predictive signal — data-aware features provide only marginal improvement. Remaining time prediction reduces the baseline MAE from 293 to approximately 100 days.
 
-\textbf{RQ4 (Prescriptive Analytics):} SHAP analysis identifies the presence of penalty-related activities and elapsed time as the dominant risk drivers. A threshold-based policy translates predicted probabilities into tiered action recommendations (escalate, remind, or monitor), enabling proactive case management.
+\textbf{RQ4 (Prescriptive Analytics):} SHAP analysis identifies the presence of penalty-related activities and elapsed time as the dominant risk drivers. A threshold-based policy translates predicted probabilities into tiered action recommendations (escalate, remind, or monitor), allowing staff to intervene before cases reach credit collection.
 
 \subsection{Limitations}
 \label{sub:limitations}
