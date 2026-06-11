@@ -1,0 +1,40 @@
+% ==========================================
+% SECTION 8: PROTOTYPICAL DEPLOYMENT
+% ==========================================
+
+To make the analytical results accessible beyond the Python pipeline, a prototypical web application was developed using Streamlit. The dashboard allows administrative decision-makers to explore process data, evaluate model performance, and interact with the predictive system without requiring programming knowledge.
+
+\subsection{Architecture}
+\label{sub:architecture}
+
+The application is built as a multi-tab Streamlit dashboard. The main entry script (\texttt{app/app.py}) routes to six isolated tab modules stored in \texttt{app/tabs/}, maintaining a clear separation of concerns. Heavy data objects — dataframes, trained models, and precomputed reports — are loaded once at startup using Streamlit's \texttt{@st.cache\_data} and \texttt{@st.cache\_resource} decorators to ensure responsive interaction despite the large event log size.
+
+All visualizations use Plotly Express for interactivity: users can zoom, hover for details, and filter dynamically without reloading the page.
+
+\subsection{Dashboard Tabs}
+\label{sub:functionalities}
+
+The interface is organized into six tabs that mirror the analytical pipeline:
+
+\paragraph{Tab 1: Data Explorer.}
+Displays high-level KPIs (total events, cases, activities), the activity frequency distribution, fine amount histogram, case length statistics, and a monthly workload timeline.
+
+\paragraph{Tab 2: Process Discovery.}
+Renders the Petri net as an interactive SVG via Streamlit's \texttt{st.graphviz\_chart()} by parsing the saved DOT file directly. Includes the top process variants, bottleneck charts (mean and median transition durations), and the Performance Spectrum and Dotted Chart as interactive scatter plots for visual batching analysis.
+
+\paragraph{Tab 3: Model Performance.}
+Provides a tabular and visual comparison of all trained models across prefix lengths and feature variants. Displays AUC-ROC, F1-score, precision, and recall for outcome classification, as well as MAE and RMSE for remaining time prediction.
+
+\paragraph{Tab 4: Predictive System.}
+Functions as a live prediction tool. The user selects a prefix length and feature variant, then inputs case attributes through sliders and checkboxes. The embedded XGBoost classifier outputs a probability score and assigns the case to a risk tier (GREEN / YELLOW / RED) with a corresponding action recommendation. A SHAP waterfall plot provides local explainability for each individual prediction.
+
+\paragraph{Tab 5: Conformance Checking.}
+Visualizes the five compliance rule results from Section~\ref{sub:conformance}, displaying compliance rates and violation counts in an interactive bar chart format.
+
+\paragraph{Tab 6: Generative AI.}
+Shows the synthetic log quality metrics (JSD, trace length comparison, directly-follows coverage) and allows users to download the generated synthetic event log as a CSV file.
+
+\subsection{Deployment Considerations}
+\label{sub:deployment_notes}
+
+The application runs locally via \texttt{streamlit run app/app.py} and requires the trained models and feature files to be present in \texttt{outputs/} and \texttt{data/features/}. For a production deployment, the application could be containerized and served behind a reverse proxy. However, since this is a university prototype, no authentication, logging, or horizontal scaling was implemented.

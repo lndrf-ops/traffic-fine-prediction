@@ -1,0 +1,52 @@
+% ==========================================
+% SECTION 7: GENERATIVE AI
+% ==========================================
+
+This section describes the generation of a synthetic event log using a first-order Markov chain learned from the real process data. Synthetic logs are useful for data augmentation, privacy-preserving data sharing, and stress-testing process models without exposing sensitive operational records.
+
+\subsection{Markov Chain Approach}
+\label{sub:markov_chain}
+
+A first-order Markov model was learned from the completed cases in the event log. For each activity, the model records the empirical probability distribution over possible successor activities (including a terminal state). Trace generation starts at \textit{Create Fine} and samples successor activities according to the learned transition probabilities until a terminal state is reached or a maximum trace length of 20 events is exceeded.
+
+This approach is simple to implement and computationally inexpensive. However, it captures only immediate transitions and cannot reproduce long-range dependencies — for instance, repeated payment cycles or sequences that depend on events more than one step in the past. Higher-order Markov models or neural sequence generators would improve structural fidelity but are beyond the scope of this bonus task.
+
+\subsection{Quality Assessment}
+\label{sub:gen_quality}
+
+The synthetic log was evaluated against the real event log on three metrics:
+
+\textbf{Activity frequency distribution.} The Jensen-Shannon divergence between the real and synthetic activity distributions is 0.000225 (on a scale where 0 indicates identical distributions and 0.69 represents maximum divergence). Table~\ref{tab:gen_activity} shows that individual activity frequencies match within one percentage point.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+\textbf{Activity} & \textbf{Real (\%)} & \textbf{Synthetic (\%)} \\
+\midrule
+Create Fine & 25.31 & 25.54 \\
+Send Fine & 16.04 & 15.88 \\
+Insert Fine Notification & 15.32 & 15.19 \\
+Add penalty & 15.32 & 14.86 \\
+Payment & 15.51 & 16.57 \\
+Send for Credit Collection & 11.80 & 11.16 \\
+\bottomrule
+\end{tabular}
+\caption{Activity frequency comparison between real and synthetic event logs (top 6 activities).}
+\label{tab:gen_activity}
+\end{table}
+
+\textbf{Trace length distribution.} The real log has a mean trace length of 3.95 events (std: 1.58), while the synthetic log produces a mean of 3.92 (std: 1.49). Figure~\ref{fig:gen_trace_length} shows that the two distributions align closely.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{generative_trace_length_comparison.png}
+    \caption{Trace length distribution: real vs.\ synthetic event log.}
+    \label{fig:gen_trace_length}
+\end{figure}
+
+\textbf{Directly-follows coverage.} The synthetic log reproduces 28 of the 67 directly-follows pairs observed in the real log (41.8\% coverage). This is the primary limitation of the first-order model: rare transitions — particularly those involving appeal activities — are underrepresented because the Markov chain favors high-probability paths. The dominant process variants are reproduced faithfully, but the tail of infrequent behavior is not fully captured.
+
+\subsection{Limitations and Future Work}
+
+The Markov chain approach succeeds at replicating the aggregate statistical properties of the event log (activity frequencies, trace lengths) but falls short on structural diversity. A more capable synthetic log generator would require at least a second-order model or a neural approach to capture the full range of process behavior. Additionally, the current implementation does not generate realistic timestamps — extending the model with inter-event time distributions would be a natural next step.

@@ -1,0 +1,81 @@
+% ==========================================
+% SECTION 6: INTERPRETABILITY AND PRESCRIPTIVE ANALYTICS
+% ==========================================
+
+While the predictive models from the previous section achieve strong classification performance, understanding \textit{why} a model predicts a particular outcome is equally important — both for validating that the model relies on plausible features and for informing process improvements. This section applies SHAP-based feature importance analysis to the XGBoost outcome classifier and translates the resulting insights into a prescriptive recommendation system.
+
+\subsection{Feature Importance via SHAP}
+\label{sub:shap}
+
+SHAP (SHapley Additive exPlanations) assigns each feature a contribution to the model's prediction for a given instance, grounded in cooperative game theory \parencite{lundberg2017}. Because XGBoost is a tree ensemble, exact Shapley values can be computed efficiently using the TreeExplainer algorithm without approximation.
+
+SHAP summary plots were generated for all combinations of variant (CF, DA) and prefix length ($k \in \{2, 3, 5\}$). Figure~\ref{fig:shap_da_k5} shows the summary for the best-performing configuration (DA, $k=5$).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{shap_da_k5.png}
+    \caption{SHAP summary plot for XGBoost outcome classifier (DA variant, $k=5$). Each dot represents one test case; the horizontal position shows the feature's contribution to the prediction.}
+    \label{fig:shap_da_k5}
+\end{figure}
+
+The SHAP analysis reveals the following key drivers of credit collection risk:
+
+\begin{itemize}
+    \item \textbf{Activity indicators:} The presence of \textit{Add penalty} and \textit{Insert Fine Notification} in the prefix strongly pushes predictions toward class~1 (credit collection). Conversely, an early \textit{Payment} event dominates predictions toward class~0.
+    \item \textbf{Elapsed time:} Longer time since case start correlates with higher predicted risk — cases that remain unresolved for extended periods are more likely to escalate.
+    \item \textbf{Fine amount:} Higher amounts show a moderate positive association with credit collection risk in the DA variant.
+\end{itemize}
+
+Figure~\ref{fig:shap_cf_k5} shows the SHAP summary for the CF variant at the same prefix length for comparison.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{shap_cf_k5.png}
+    \caption{SHAP summary plot for XGBoost outcome classifier (CF variant, $k=5$). Without payload attributes, the model relies entirely on activity indicators and temporal features.}
+    \label{fig:shap_cf_k5}
+\end{figure}
+
+Comparing the two variants reveals why data-aware features provide minimal improvement for outcome prediction. In the CF plot, the activity indicators \textit{Add penalty} and \textit{Insert Fine Notification} already dominate the prediction — their presence in the prefix is a near-deterministic signal for credit collection. When payload attributes such as \texttt{amount} and \texttt{points} are added in the DA variant, they appear in the SHAP ranking but with substantially smaller effect sizes. The activity sequence has already captured the escalation trajectory; the numeric attributes merely provide redundant confirmation.
+
+This finding has a practical implication: for outcome prediction, a deployment could rely on the simpler CF model without collecting or maintaining payload data, reducing implementation complexity while sacrificing negligible predictive performance.
+
+\subsection{Prescriptive Process Monitoring}
+\label{sub:prescriptive}
+
+Prescriptive analytics moves beyond forecasting by recommending specific interventions. Rather than only predicting which cases will escalate, the system assigns each case to a risk tier with a corresponding recommended action based on the predicted probability of credit collection.
+
+\subsubsection{Policy Design}
+
+A threshold-based action policy assigns each active case to a risk tier based on the XGBoost model's predicted probability $p$ of credit collection:
+
+\begin{itemize}
+    \item $p \geq 0.75$ — \textbf{RED}: Immediate escalation. Proactively offer a payment plan to prevent costly debt collection.
+    \item $0.50 \leq p < 0.75$ — \textbf{YELLOW}: Send a manual reminder or initiate proactive contact.
+    \item $p < 0.50$ — \textbf{GREEN}: No intervention required. The case is likely to resolve through normal payment.
+\end{itemize}
+
+The thresholds are motivated by a cost-benefit analysis. A prevented credit collection saves an estimated 120 EUR in administrative and agency costs, while proactive outreach costs approximately 15 EUR and a reminder costs 5 EUR. The expected net gain of an intervention is:
+\begin{equation*}
+    \text{Expected Gain} = p \cdot \text{Benefit}_{\text{prevented}} - \text{Cost}_{\text{action}}
+\end{equation*}
+
+At $p = 0.75$, immediate escalation yields an expected gain of approximately 75 EUR per case — well above the intervention cost. The cost parameters used here are illustrative assumptions; in a production deployment, they would need to be calibrated from historical intervention data and actual recovery rates.
+
+\subsubsection{Results}
+
+The policy was applied to the full temporal test set (24,436 cases) using the XGBoost DA model at $k=5$:
+
+\begin{itemize}
+    \item \textbf{RED} (escalate): 12,929 cases (52.9\%)
+    \item \textbf{YELLOW} (reminder): 362 cases (1.5\%)
+    \item \textbf{GREEN} (no action): 11,145 cases (45.6\%)
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{prescriptive_risk_tiers.png}
+    \caption{Distribution of predicted risk scores across the three policy tiers.}
+    \label{fig:prescriptive_tiers}
+\end{figure}
+
+The bimodal distribution — most cases cluster near either high or low predicted risk — reflects the process structure observed in the variant analysis: cases tend to follow either the payment path or the collection path with relatively few ambiguous intermediate cases. The narrow YELLOW band confirms that the model produces well-separated predictions, making the threshold-based policy straightforward to apply in practice.

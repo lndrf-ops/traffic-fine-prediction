@@ -1,0 +1,131 @@
+% The core Machine Learning section (refer to features.py and train.py).
+
+This section describes the predictive process monitoring pipeline. Two prediction tasks are addressed: outcome classification and remaining time prediction. Following \textcite{teinemaa2019}, the experimental design compares multiple model families across different prefix lengths and feature variants.
+
+\subsection{Experimental Design}
+
+The core experiment evaluates every model in two feature variants:
+
+\begin{itemize}
+    \item \textbf{Control-Flow (CF):} Only the sequence of activities in the prefix is used. Features include activity indicators, prefix length, and temporal attributes derived from timestamps.
+    \item \textbf{Data-Aware (DA):} In addition to control-flow features, case-level payload attributes are included: \texttt{amount}, \texttt{points}, \texttt{vehicleClass}, and \texttt{article}.
+\end{itemize}
+
+Each variant is evaluated at prefix lengths $k \in \{2, 3, 5\}$, representing increasing amounts of observable process history at prediction time. This design allows a systematic comparison of whether data-aware features provide additional predictive value beyond the activity sequence alone.
+
+\subsection{Feature Engineering}
+\label{sub:feature_engineering}
+
+Features are constructed from case prefixes following the methodology of \textcite{teinemaa2019}. For each case, only the first $k$ events are used as input — simulating a realistic online prediction scenario where the final outcome is unknown.
+
+For tabular models, the prefix is aggregated into a fixed-length feature vector containing:
+\begin{itemize}
+    \item Activity indicators: binary flags for each activity observed in the prefix
+    \item Temporal features: elapsed time since case start, start year, start month, and start weekday
+    \item Prefix length
+    \item Payload aggregates (DA variant only): cumulative amount, points, and one-hot encoded vehicle class and article
+\end{itemize}
+
+For the LSTM model, the prefix is represented as an ordered integer sequence of activity IDs, padded or truncated to length $k$. In the DA variant, payload features are concatenated to each time step.
+
+Outcome-revealing activities — \textit{Payment} and \textit{Send for Credit Collection} — are excluded from all input features to prevent data leakage. This exclusion is critical: if the model observed \textit{Payment} in the prefix, it could trivially infer the outcome without learning any generalizable pattern. By removing these activities from the input vocabulary, the model is forced to learn from the preceding administrative steps — which is precisely the information available at the point when a prediction would be made in practice.
+
+The resulting feature matrices have modest dimensionality. At $k=2$ in the CF variant, each case is represented by approximately 15 features (activity flags plus temporal attributes). In the DA variant, one-hot encoding of \texttt{article} (grouped into 11 categories) and \texttt{vehicleClass} expands the feature vector to roughly 30 columns. This low dimensionality explains why even simple linear models perform well — the feature space is compact and the signal-to-noise ratio is high.
+
+\subsection{Data Splitting Strategy}
+
+A temporal split ensures that no future information leaks into training. Cases are sorted by their start timestamp and divided into three sets:
+
+\begin{itemize}
+    \item Training: 64\% (oldest cases)
+    \item Validation: 16\%
+    \item Test: 20\% (most recent cases) — 25,321 cases
+\end{itemize}
+
+This simulates a deployment scenario where the model is trained on historical data and evaluated on cases that occur later in time.
+
+\subsection{Model Lineup}
+
+Four model families are trained for outcome classification, and four for remaining time regression:
+
+\textbf{Outcome (classification):}
+\begin{enumerate}
+    \item \textbf{Majority Baseline:} Always predicts the most frequent class.
+    \item \textbf{Logistic Regression:} Linear model with standardized features and balanced class weights.
+    \item \textbf{Random Forest:} Ensemble of 100 trees with balanced class weights.
+    \item \textbf{XGBoost:} Gradient-boosted trees with early stopping on the validation set.
+    \item \textbf{LSTM:} Embedding layer → LSTM layer → dropout → linear output, trained with weighted binary cross-entropy.
+\end{enumerate}
+
+\textbf{Remaining Time (regression):}
+\begin{enumerate}
+    \item \textbf{Mean Baseline:} Always predicts the training-set mean duration.
+    \item \textbf{Linear Regression}
+    \item \textbf{Random Forest Regressor}
+    \item \textbf{XGBoost Regressor} (with early stopping)
+    \item \textbf{LSTM Regressor:} Same architecture as above with a linear output head.
+\end{enumerate}
+
+\subsection{Outcome Classification Results}
+
+Table~\ref{tab:outcome_results} reports the test-set performance for outcome prediction. The primary metrics are AUC-ROC and F1-score for the positive class (credit collection).
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llccc}
+\toprule
+\textbf{Model} & \textbf{Variant} & \textbf{$k$} & \textbf{AUC-ROC} & \textbf{F1 (Collection)} \\
+\midrule
+Majority Baseline & CF & 2 & 0.500 & 0.000 \\
+Logistic Regression & CF & 2 & 0.879 & 0.854 \\
+Random Forest & CF & 2 & 0.879 & 0.854 \\
+XGBoost & CF & 2 & 0.879 & 0.854 \\
+LSTM & CF & 5 & 0.888 & 0.855 \\
+\midrule
+Logistic Regression & DA & 2 & 0.880 & 0.854 \\
+Random Forest & DA & 2 & 0.877 & 0.837 \\
+XGBoost & DA & 2 & 0.880 & 0.854 \\
+LSTM & DA & 5 & 0.889 & 0.854 \\
+\bottomrule
+\end{tabular}
+\caption{Outcome classification results on the temporal test set (selected configurations).}
+\label{tab:outcome_results}
+\end{table}
+
+Several observations stand out. First, all trained models substantially outperform the majority baseline, confirming that the activity sequence carries strong predictive signal for the outcome. Second, the performance difference between models is remarkably small — Logistic Regression, Random Forest, and XGBoost achieve nearly identical scores at $k=2$. This suggests that the prediction problem is largely linearly separable given the prefix features. Third, longer prefixes provide only marginal improvement: AUC increases from 0.879 at $k=2$ to 0.889 at $k=5$. Fourth, the DA variant does not meaningfully outperform the CF variant, indicating that the activity sequence alone captures most of the predictive information.
+
+\subsection{Remaining Time Prediction Results}
+
+Table~\ref{tab:remaining_results} reports the regression performance measured in Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE), both in days.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llccc}
+\toprule
+\textbf{Model} & \textbf{Variant} & \textbf{$k$} & \textbf{MAE (days)} & \textbf{RMSE (days)} \\
+\midrule
+Mean Baseline & CF & 2 & 293.0 & 313.1 \\
+Linear Regression & CF & 2 & 106.2 & 168.0 \\
+Random Forest & CF & 2 & 106.2 & 168.0 \\
+XGBoost & CF & 2 & 106.2 & 168.0 \\
+LSTM & CF & 5 & 102.3 & 166.2 \\
+\midrule
+XGBoost & DA & 2 & 99.6 & 162.9 \\
+LSTM & DA & 5 & 101.2 & 165.2 \\
+\bottomrule
+\end{tabular}
+\caption{Remaining time prediction results on the temporal test set (selected configurations).}
+\label{tab:remaining_results}
+\end{table}
+
+All models reduce the MAE from 293 days (mean baseline) to approximately 100–106 days. Unlike outcome prediction, the DA variant provides a modest improvement for remaining time: XGBoost DA achieves an MAE of 99.6 days compared to 106.2 in the CF variant. The payload attribute \texttt{amount} likely contributes information about case complexity that correlates with processing duration.
+
+\subsection{Discussion}
+
+The results reveal that the Road Traffic Fine Management process is highly predictable from minimal prefix information. Even with only two observed activities, models achieve an AUC of 0.88 — a strong result given the early prediction point. The near-identical performance across model families at each prefix length indicates that the underlying signal is well-captured by simple features, and that the process structure leaves limited room for complex models to differentiate themselves.
+
+The convergence of all models at $k=2$ deserves closer examination. An analysis of outcome rates conditioned on the second activity reveals the underlying mechanism: cases whose second activity is \textit{Payment} have a credit collection rate of only 0.1\%, while cases whose second activity is \textit{Send Fine} escalate in 74\% of cases. Since these two activities account for over 99\% of all second events, the second activity alone is nearly sufficient to determine the outcome. This explains why a simple Logistic Regression matches the performance of an LSTM at this prefix length — the decision boundary is essentially a single threshold on one binary feature. At longer prefix lengths ($k=5$), the LSTM gains a marginal advantage because the ordering of subsequent activities (notification, penalty) provides additional sequential context that aggregated tabular features cannot fully represent.
+
+The LSTM provides a slight advantage at longer prefix lengths, where sequential ordering becomes more informative. However, the gain over tabular models is marginal, which is consistent with the observation from Chapter~\ref{sec:eda} that most traces contain only four to five events — limiting the advantage of sequence modeling.
+
+For remaining time prediction, the high residual error (MAE $\approx$ 100 days) reflects the inherent uncertainty of the process: throughput times range from days to years, and much of the variation is driven by external citizen behavior that cannot be predicted from the event log alone. In relative terms, the MAE corresponds to approximately 29\% of the mean throughput time (342 days), representing a substantial reduction in uncertainty compared to the naïve baseline. Nevertheless, this level of precision is best suited for aggregate workload planning — for instance, estimating how many cases will conclude within a given quarter — rather than individual case-level time commitments. For operational decision-making at the case level, the outcome classifier with its prescriptive tier system (Section~\ref{sec:interpretability}) remains the primary tool.
