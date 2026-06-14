@@ -1,27 +1,16 @@
 """Task 3b: Batching Analysis
 
-Observation from the Dotted Chart: Several activities form vertical lines,
-indicating periodic batch execution rather than event-driven processing.
-Consistent with Martin et al. (2017, Decision Support Systems) who identified
-batch behaviour in this same RTFM dataset.
+Investigates batch-processing behaviour observed in the Dotted Chart
+(vertical lines indicating periodic bulk execution).
 
-This script investigates:
-  1. Batch concentration ranking: Computes a continuous "activity rate" for
-     each activity (active_days / calendar_span) and events_per_active_day.
-     No arbitrary threshold — the natural gap in the data speaks for itself.
-  2. Waiting time analysis for the top-3 most concentrated activities:
-     How long do cases idle before each fires?
-  3. Implications for predictive modelling: Quantifies the structural floor on
-     remaining-time MAE imposed by batch scheduling.
+Computes:
+  1. Batch concentration ranking (activity rate, events per active day)
+  2. Waiting time analysis for the top-3 most concentrated activities
+  3. Structural floor on remaining-time MAE imposed by batch scheduling
 
 Saves:
   - outputs/plots/batching_analysis.png
   - outputs/reports/batching_analysis.json
-
-References:
-  - Martin, N., Swennen, M., Depaire, B., Jans, M., Caris, A., & Vanhoof, K.
-    (2017). Retrieving batch organisation of work insights from event logs.
-    Decision Support Systems, 100, 119–128.
 """
 
 import json
