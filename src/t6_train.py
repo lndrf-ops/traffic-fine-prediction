@@ -4,15 +4,8 @@ Trains all models in two variants (Control-Flow only / Data-Aware) for
 two tasks (Outcome classification / Remaining Time regression).
 """
 
-import os
-import warnings
-
-# --- MAC MULTIPROCESSING FIX ---
-# Verhindert den "loky" Segmentation Fault auf Apple Silicon Macs
-os.environ['OBJC_DISABLE_INITIALIZE_FORK_SAFETY'] = 'YES'
-# -------------------------------
-
 import json
+import os
 import random
 
 import joblib
@@ -22,8 +15,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.dummy import DummyClassifier, DummyRegressor
-from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.linear_model import LinearRegression, LogisticRegression
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, TensorDataset
 from xgboost import XGBClassifier, XGBRegressor
