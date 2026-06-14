@@ -1,9 +1,16 @@
 venv/
 
-data/raw/
-data/processed/
+data/raw/*.xes
+data/cleaned/
+data/features/
+
+outputs/
 
 .DS_Store
+.vscode/
 
 __pycache__/
 *.pyc
+
+# LaTeX report
+uniReport/
