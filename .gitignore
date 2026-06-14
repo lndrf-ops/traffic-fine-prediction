@@ -19,19 +19,8 @@ PLAN.md
 docs/
 review.md
 
-# LaTeX build artifacts
-uniReport/out/
-uniReport/*.aux
-uniReport/*.bbl
-uniReport/*.bcf
-uniReport/*.blg
-uniReport/*.fdb_latexmk
-uniReport/*.fls
-uniReport/*.log
-uniReport/*.out
-uniReport/*.run.xml
-uniReport/*.toc
-uniReport/*.synctex.gz
+# LaTeX report (submitted separately)
+uniReport/
 
 aisr/
 
