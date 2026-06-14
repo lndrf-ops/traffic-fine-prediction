@@ -150,13 +150,17 @@ def main():
     gviz.edge_attr['color'] = '#a02c34'
     gviz.edge_attr['fontname'] = 'Arial'
 
-    pn_visualizer.save(gviz, f"{save_dir}/petri_net.png")
-    print(f"     ✅ Petri Net saved")
-
-    # Save DOT source
+    # Save DOT source (always works, no system dependency)
     dot_string = gviz.source if hasattr(gviz, 'source') else str(gviz)
     with open(f"{save_dir}/petri_net.dot", "w", encoding="utf-8") as f:
         f.write(dot_string)
+
+    # Save PNG (requires graphviz system package; optional)
+    try:
+        pn_visualizer.save(gviz, f"{save_dir}/petri_net.png")
+        print(f"     ✅ Petri Net saved (DOT + PNG)")
+    except Exception:
+        print(f"     ✅ Petri Net saved (DOT only — install graphviz for PNG export)")
 
     # --- F) STRUCTURED REPORT ---
     print("  6. Saving structured report...")
