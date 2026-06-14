@@ -66,28 +66,38 @@ traffic-fine-prediction/
 ### Prerequisites
 
 - Python ≥ 3.10
-- Place `Road_Traffic_Fine_Management_Process.xes` in `data/raw/`
-  - Source: [4TU.ResearchData](https://data.4tu.nl/articles/dataset/Road_Traffic_Fine_Management_Process/12683249)
 
 ### Installation
 
 ```bash
-git clone https://github.com/lndrf-ops/traffic-fine-prediction.git
 cd traffic-fine-prediction
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+The dataset (`Road_Traffic_Fine_Management_Process.xes`) is included in `data/raw/`.
+
 ## Usage
 
-> **Note:** Always activate the virtual environment first: `source venv/bin/activate`
-
-### Run full pipeline
+### 1. Run the full pipeline
 
 ```bash
+source venv/bin/activate
 python run_pipeline.py
 ```
+
+This executes all 12 tasks sequentially (~5–10 min) and generates outputs in `data/` and `outputs/`.
+
+### 2. Start the Streamlit dashboard
+
+```bash
+streamlit run app/app.py
+```
+
+Opens at [http://localhost:8501](http://localhost:8501).
+
+> **Note:** The app requires the pipeline to have been run at least once (it reads from `outputs/` and `data/features/`).
 
 ### Run specific tasks
 
@@ -95,14 +105,6 @@ python run_pipeline.py
 python run_pipeline.py --only 4      # Only Process Discovery
 python run_pipeline.py --from 6.1    # From feature engineering onwards
 ```
-
-### Start Streamlit dashboard
-
-```bash
-streamlit run app/app.py
-```
-
-Opens at [http://localhost:8501](http://localhost:8501).
 
 ## Pipeline Tasks
 

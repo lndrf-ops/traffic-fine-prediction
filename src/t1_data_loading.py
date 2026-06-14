@@ -21,18 +21,18 @@ def main():
         if not os.path.exists(xes_path):
             raise FileNotFoundError(f"File {xes_path} not found!")
 
-    # 2. Daten laden
+    # 2. Load event log
     print(f"  Reading event log from: {xes_path}")
     event_log = pm4py.read_xes(xes_path)
     df = pm4py.convert_to_dataframe(event_log)
 
-    # 3. Basis-Informationen
+    # 3. Basic statistics
     n_cases = df['case:concept:name'].nunique()
     n_events = len(df)
     n_activities = df['concept:name'].nunique()
     print(f"  Cases: {n_cases:,} | Events: {n_events:,} | Activities: {n_activities}")
 
-    # 4. Speichern als roher DataFrame
+    # 4. Save raw DataFrame
     os.makedirs('data/cleaned', exist_ok=True)
     df.to_pickle("data/cleaned/df_events.pkl")
 

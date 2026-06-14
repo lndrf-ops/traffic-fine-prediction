@@ -59,7 +59,7 @@ def run_pipeline(start_from=1, only=None):
         try:
             module.main()
         except Exception as e:
-            print(f"\n❌ FEHLER in Task {task_id} ({task_name}):")
+            print(f"\n❌ ERROR in Task {task_id} ({task_name}):")
             print(f"   {e}")
             raise
 

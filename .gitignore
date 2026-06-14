@@ -1,6 +1,6 @@
 venv/
 
-data/raw/
+data/raw/*.xes
 data/cleaned/
 data/features/
 
@@ -8,21 +8,9 @@ outputs/
 
 .DS_Store
 .vscode/
-.claude/
 
 __pycache__/
 *.pyc
 
-# Internal planning/review docs
-CLAUDE.md
-PLAN.md
-docs/
-review.md
-
-# LaTeX report (submitted separately)
+# LaTeX report
 uniReport/
-
-aisr/
-
-CLAUDE.md
-PLAN.md

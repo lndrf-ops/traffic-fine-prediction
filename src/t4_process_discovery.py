@@ -192,8 +192,6 @@ def main():
         json.dump(report, f, indent=2)
     print("     ✅ Report saved: outputs/reports/process_discovery.json")
 
-    # Note: Organizational perspective (resource analysis) is covered in t3b_batching_analysis.
-
     print("  ✅ Process Discovery complete")
 
 

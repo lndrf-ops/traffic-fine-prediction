@@ -1,8 +1,7 @@
 """Task 6.2: Model Training
 
 Trains all models in two variants (Control-Flow only / Data-Aware) for
-two tasks (Outcome classification / Remaining Time regression), following
-the model lineup in CLAUDE.md and the validation strategy in docs/validation_strategy.md.
+two tasks (Outcome classification / Remaining Time regression).
 """
 
 import os

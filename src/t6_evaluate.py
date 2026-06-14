@@ -1,8 +1,8 @@
 """Task 6.3: Model Evaluation
 
-Evaluates all trained models on the held-out test split using the metrics
-defined in docs/validation_strategy.md:
+Evaluates all trained models on the held-out test split.
 
+Metrics:
   Outcome (classification):  AUC-ROC (primary), F1 positive class, Brier Score
   Remaining Time (regression): MAE in days (primary), RMSE
 
