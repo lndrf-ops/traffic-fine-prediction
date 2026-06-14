@@ -1,4 +1,4 @@
-"""Bonus: Generative AI — Synthetic Event Log Generation
+"""Task 8: Generative AI — Synthetic Event Log Generation
 
 Learns a first-order Markov chain from completed RTFM cases and generates
 synthetic traces.  Includes a quality evaluation comparing generated traces
@@ -7,8 +7,6 @@ and directly-follows relation coverage).
 
 Limitation: A first-order Markov model captures only immediate transitions and
 cannot reproduce long-range dependencies (e.g., repeated payment cycles).
-Higher-order models or neural approaches (e.g., seq2seq) would improve fidelity
-but are out of scope for this bonus task.
 
 Saves:
   - outputs/reports/synthetic_event_log.csv
