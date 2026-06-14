@@ -1,31 +1,13 @@
-"""Bonus: Prescriptive Process Analytics
+"""Task 7: Prescriptive Process Analytics
 
-Translates trained outcome-prediction models into actionable intervention
-recommendations for active (in-flight) cases.
-
-Approach: Threshold-based action policy derived from calibrated XGBoost outcome
-probabilities (Di Francescomarino et al. 2017, "Clustering-based Prescriptive
-Process Monitoring"):
+Threshold-based action policy using XGBoost outcome probabilities:
   - p >= 0.75  →  RED:    escalate immediately (payment plan offer)
   - p in [0.50, 0.75)  →  YELLOW: manual reminder / proactive contact
   - p < 0.50  →  GREEN:  no intervention required
 
-Unlike purely descriptive or predictive analytics, prescriptive analytics
-estimates the expected net gain from intervention: it compares model-predicted
-risk with and without a proposed action.
-
-This module:
-  1. Loads the best classical model (XGBoost, DA variant, k=5 — highest AUC).
-  2. Computes predicted risk for the full test set.
-  3. Assigns each case to a policy tier and estimates intervention cost-benefit.
-  4. Saves: outputs/reports/prescriptive_recommendations.csv
-           outputs/plots/prescriptive_risk_tiers.png
-
-References:
-  - Di Francescomarino et al. (2017). Clustering-based Prescriptive Process
-    Monitoring. In AAAI 2017.
-  - Teinemaa et al. (2019). Outcome-oriented predictive process monitoring.
-    ACM TKDD 13(2).
+Saves:
+  - outputs/reports/prescriptive_recommendations.csv
+  - outputs/plots/prescriptive_risk_tiers.png
 """
 
 import os
@@ -36,15 +18,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-# Policy thresholds (justified: typical cost asymmetry for debt-collection vs
-# manual follow-up; conservative RED threshold to minimise false escalations)
 THRESHOLD_RED = 0.75
 THRESHOLD_YELLOW = 0.50
 
-# Cost-benefit assumptions (€, stylised for illustration)
-COST_ESCALATION = 15.0       # cost of immediate payment-plan outreach
-COST_REMINDER = 5.0          # cost of manual reminder
-BENEFIT_PREVENTED_COLLECTION = 120.0  # avg. loss avoided by preventing credit collection
+# Cost-benefit assumptions (€, illustrative)
+COST_ESCALATION = 15.0
+COST_REMINDER = 5.0
+BENEFIT_PREVENTED_COLLECTION = 120.0
 
 
 def load_test_data(variant: str = "da", k: int = 5) -> tuple[np.ndarray, np.ndarray, list]:
