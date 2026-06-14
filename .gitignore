@@ -8,9 +8,16 @@ outputs/
 
 .DS_Store
 .vscode/
+.claude/
 
 __pycache__/
 *.pyc
+
+# Internal planning/review docs
+CLAUDE.md
+PLAN.md
+docs/
+review.md
 
 # LaTeX build artifacts
 uniReport/out/
@@ -25,6 +32,8 @@ uniReport/*.out
 uniReport/*.run.xml
 uniReport/*.toc
 uniReport/*.synctex.gz
+
+aisr/
 
 CLAUDE.md
 PLAN.md
