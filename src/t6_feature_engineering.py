@@ -1,17 +1,15 @@
 """Task 6.1: Feature Engineering for Predictive Process Monitoring
 
 Builds prefix-based feature sets following Teinemaa et al. (2019):
-- Prefix lengths k ∈ {2, 3, 5, 8}
+- Prefix lengths k ∈ {2, 3, 5}
 - Two feature variants per k: Control-Flow only (CF) and Data-Aware (DA)
 - Two prediction targets: outcome (classification) and remaining time (regression)
-- Temporal split: 64% train / 16% val / 20% test (sorted by case start timestamp)
-- Debiased split: cases crossing train/test boundary are dropped (Teinemaa 2019, §4)
-- All aggregates are prefix-bounded — no future leakage
+- Temporal split: 64% train / 16% val / 20% test
 
 Saves:
-  data/features/prefix_k{k}_{cf|da}.parquet  — classical ML features per k
-  data/features/sequences.parquet            — LSTM sequences (all k, padded)
-  data/features/split_indices.json           — train/val/test case IDs
+  data/features/prefix_k{k}_{cf|da}.parquet
+  data/features/sequences.parquet
+  data/features/split_indices.json
 """
 
 import json
@@ -20,36 +18,19 @@ import os
 import numpy as np
 import pandas as pd
 
-# Outcome-revealing activities — must never appear in the prefix (leakage guardrail #1)
+# Activities excluded from prefix input to prevent data leakage
 OUTCOME_ACTIVITIES = {"Payment", "Send for Credit Collection"}
 
-# Prefix lengths to evaluate (Teinemaa 2019, §3.2)
-# Longer prefixes (k≥5) show saturating performance.
 PREFIX_LENGTHS = [2, 3, 5]
 
-# Leakage-safe payload columns for the Data-Aware variant.
-#
-# Dropped attributes and reasons:
-#   totalPaymentAmount — cumulative payment, only known at case end (future leakage)
-#   paymentAmount      — individual payment amount, leaks outcome (only exists if case = Payment)
-#   expense            — notification cost, accrues over time (future leakage)
-#   notificationType   — 99.8% = "P", near-constant; redundant with activity "Insert Fine Notification"
-#   dismissal          — 98.5% = "NIL", near-constant, negligible predictive value
-#   org:resource       — 73% missing, 148 unique IDs; outcome variation ±12pp is weak and
-#                        confounded with case attributes (amount, article) already in the model
-#   lifecycle:transition — single value ("complete"), zero information
-#   lastSent           — 86% missing, 3 unique values, redundant with activity sequence
-#   matricola          — 99.9% missing, single unique value
-#
-# Numeric: summed over prefix events. Categorical: most-frequent value (mode) in prefix.
+# Payload columns for the Data-Aware variant (leakage-safe only).
+# Excluded: totalPaymentAmount, paymentAmount, expense (future leakage),
+# notificationType, dismissal, org:resource, lastSent, matricola (near-empty or constant).
 DA_PAYLOAD_COLS_NUMERIC = ["amount", "points"]
 DA_PAYLOAD_COLS_CATEGORICAL = ["vehicleClass", "article"]
 DA_PAYLOAD_COLS = DA_PAYLOAD_COLS_NUMERIC + DA_PAYLOAD_COLS_CATEGORICAL
 
-# Top-10 articles cover 98.5% of cases; group the remaining 56 as "Other"
-# to reduce dimensionality (66 → 11 one-hot columns).
-# Distribution: Art. 157 (speeding, 45%), Art. 7 (red light, 29%),
-# Art. 158 (minor speeding, 18%) → top 3 alone = 92%.
+# Top-10 articles cover 98.5% of cases; remaining grouped as "Other"
 ARTICLE_TOP_N = [157.0, 7.0, 158.0, 142.0, 181.0, 180.0, 171.0, 80.0, 172.0, 146.0]
 
 
