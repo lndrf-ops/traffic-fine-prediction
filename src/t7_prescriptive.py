@@ -24,35 +24,27 @@ THRESHOLD_YELLOW = 0.50
 # Cost-benefit assumptions (€, illustrative)
 COST_ESCALATION = 15.0
 COST_REMINDER = 5.0
-BENEFIT_PREVENTED_COLLECTION = 120.0
+BASE_COLLECTION_COST = 50.0   # fixed admin cost per collection case
+AGENCY_FEE_RATE = 0.20        # collection agencies typically charge 15-25% of debt
 
 
-def load_test_data(variant: str = "da", k: int = 5) -> tuple[np.ndarray, np.ndarray, list]:
+def load_test_data(variant: str = "da", k: int = 5) -> tuple[np.ndarray, np.ndarray, list, pd.DataFrame]:
     df = pd.read_parquet(f"data/features/prefix_k{k}_{variant}.parquet")
     test = df[df["split"] == "test"].drop(columns=["split"])
     fcols = [c for c in test.columns if c not in {"label", "remaining_days"}]
-    return test[fcols].values, test["label"].values, fcols
+    return test[fcols].values, test["label"].values, fcols, test
 
 
-def compute_expected_gain(prob: float, action: str) -> float:
+def compute_expected_gain(prob: float, action: str, benefit: float) -> float:
     """Expected monetary gain of taking action vs. doing nothing.
 
     Gain = P(collection) * benefit_avoided - cost_of_action
-
-    Args:
-        prob: Predicted probability of credit collection (label=1).
-        action: 'escalate', 'reminder', or 'none'.
-
-    Returns:
-        Expected net gain in €.
+    Benefit is case-specific: base admin cost + agency fee proportional to fine amount.
     """
     if action == "escalate":
-        return prob * BENEFIT_PREVENTED_COLLECTION - COST_ESCALATION
+        return prob * benefit - COST_ESCALATION
     if action == "reminder":
-        # Partial effect: reminders are less effective than direct escalation.
-        # Assumption: ~50% conversion rate vs. full escalation, based on typical
-        # debt-collection literature (e.g., early-stage nudges vs. formal demands).
-        return prob * BENEFIT_PREVENTED_COLLECTION * 0.5 - COST_REMINDER  # partial effect
+        return prob * benefit * 0.5 - COST_REMINDER
     return 0.0
 
 
@@ -67,7 +59,7 @@ def assign_policy(prob: float) -> tuple[str, str]:
 
 def main():
     print("=" * 60)
-    print("BONUS: Prescriptive Process Analytics")
+    print("TASK 7: Prescriptive Process Analytics")
     print("=" * 60)
 
     os.makedirs("outputs/reports", exist_ok=True)
@@ -80,9 +72,12 @@ def main():
         return
 
     model = joblib.load(model_path)
-    X_test, y_test, fcols = load_test_data(variant="da", k=5)
+    X_test, y_test, fcols, test_df = load_test_data(variant="da", k=5)
 
-    # Use the full test set for statistically robust prescriptive evaluation
+    # Extract case-level fine amount for dynamic cost-benefit calculation
+    amount_col = "amount_sum_prefix" if "amount_sum_prefix" in test_df.columns else None
+    fine_amounts = test_df[amount_col].values if amount_col else np.full(len(X_test), 63.0)
+
     X_sample = X_test
     y_sample = y_test
     idx = np.arange(len(X_test))
@@ -91,15 +86,19 @@ def main():
 
     rows = []
     for i, (prob, true_label) in enumerate(zip(proba, y_sample)):
+        # Case-specific benefit: fixed admin cost + agency fee on the actual fine
+        benefit = BASE_COLLECTION_COST + fine_amounts[i] * AGENCY_FEE_RATE
         tier, action = assign_policy(prob)
-        gain = compute_expected_gain(prob, action)
+        gain = compute_expected_gain(prob, action, benefit)
         rows.append(
             {
                 "case_index": idx[i],
+                "fine_amount": round(float(fine_amounts[i]), 2),
                 "predicted_risk": round(float(prob), 4),
                 "true_label": int(true_label),
                 "policy_tier": tier,
                 "recommended_action": action,
+                "benefit_if_prevented": round(benefit, 2),
                 "expected_gain_eur": round(gain, 2),
             }
         )
@@ -117,6 +116,8 @@ def main():
         n = tier_counts.get(tier, 0)
         print(f"    {tier:<8} {n:>4} cases")
     print(f"  Total expected net gain: €{total_gain:,.2f}")
+    avg_benefit = df_rec["benefit_if_prevented"].mean()
+    print(f"  Mean benefit per case:   €{avg_benefit:,.2f} (dynamic, based on fine amount)")
 
     # --- Risk tier scatter plot ---
     color_map = {"RED": "#EF553B", "YELLOW": "#FFA15A", "GREEN": "#00CC96"}
